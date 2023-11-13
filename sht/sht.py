@@ -9,6 +9,29 @@ import numpy as np
 import numba as nb
 
 
+@nb.njit
+def ext_slow_recurrence(Nl,xx,Ylm):
+    """Pull out the slow, multi-loop piece of the recurrence.  In
+    order to use JIT this can not be part of the class, and we need
+    to pass Nl,x,Ylm as arguments."""
+    # This should match the convention used below.
+    indx = lambda ell,m:  ( ell*(ell+1) )//2 + m
+    for m in range(0,Nl-1):
+        for ell in range(m+2,Nl):
+            i0,i1,i2    = indx(ell  ,m),\
+                          indx(ell-1,m),\
+                          indx(ell-2,m)
+            fact1,fact2 = np.sqrt( (ell-m)*1./(ell+m) ),\
+                          np.sqrt( (ell-m-1.)/(ell+m-1.) )
+            Ylm[i0,:]   = (2*ell-1)*xx*Ylm[i1,:]-\
+                          (ell+m-1)   *Ylm[i2,:]*fact2
+            Ylm[i0,:]  *= fact1/(ell-m)
+    return(Ylm)
+    #
+
+
+
+
 class DirectSHT:
     """Brute-force spherical harmonic transforms."""
     def __init__(self,Nell,Nx):
@@ -27,18 +50,16 @@ class DirectSHT:
         """The index in the grid storing Ylm for ell>=0, 0<=m<=ell."""
         ii = ( ell*(ell+1) )//2 + m
         return(ii)
-    #@nb.njit
     def slow_recurrence(self,Nl,xx,Ylm):
-        """Pull out the slow, multi-loop piece of the recurrence.  Have
-        Nl,x,Ylm passed as arguments to allow a "dummy" call to compile
-        and use of JIT."""
+        """Pull out the slow, multi-loop piece of the recurrence.
+        THIS IS CURRENTLY NOT USED."""
         for m in range(0,Nl-1):
             for ell in range(m+2,Nl):
                 i0,i1,i2    = self.indx(ell  ,m),\
                               self.indx(ell-1,m),\
                               self.indx(ell-2,m)
                 fact1,fact2 = np.sqrt( (ell-m)*1./(ell+m) ),\
-                               np.sqrt( (ell-m-1.)/(ell+m-1.) )
+                              np.sqrt( (ell-m-1.)/(ell+m-1.) )
                 Ylm[i0,:]   = (2*ell-1)*xx*Ylm[i1,:]-\
                               (ell+m-1)   *Ylm[i2,:]*fact2
                 Ylm[i0,:]  *= fact1/(ell-m)
@@ -72,8 +93,8 @@ class DirectSHT:
             Ylm[i1,:] = np.sqrt(2*m+1.)*xx*Ylm[i0,:]
         # Finally fill in ell>m+1:
         # First a dummy, warmup run to JIT compile, then the real thing.
-        _   = self.slow_recurrence( 1,xx,Ylm)
-        Ylm = self.slow_recurrence(Nl,xx,Ylm)
+        _   = ext_slow_recurrence( 1,xx,Ylm)
+        Ylm = ext_slow_recurrence(Nl,xx,Ylm)
         # And finally put in the (2ell+1)/4pi normalization:
         for ell in range(Nl):
             fact = np.sqrt( (2*ell+1)/4./np.pi )
