@@ -12,12 +12,12 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/martinjameswhite/direct_sht",
-    packages=['sht']
+    packages=['sht'],
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
     python_requires='>=3.6',
-    install_requires=['numpy','scipy'],
+    install_requires=['numpy','scipy','numba'],
 )
