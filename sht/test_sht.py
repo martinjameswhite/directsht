@@ -31,7 +31,8 @@ if __name__=="__main__":
             for i,x in enumerate(sht.x):
                 theta     = np.arccos(x)
                 Ylb[ii,i] = np.real( sph_harm(m,ell,0,theta) )
-    # Just cross-check some values for sanity.
+    # Just cross-check some Ylm values for sanity.
+    print("Values:")
     ii = [0,Nx//3,2*Nx//3,Nx-1]
     Ylm= sht.Yv
     for ell in [1,10,25,40]:
@@ -44,3 +45,16 @@ if __name__=="__main__":
                 print("\t"+lbs)
                 print("\t"+mys)
     #
+    # Now print some values for the derivative (wrt Cos[theta]).
+    print("\nDerivatives:")
+    Ym = np.zeros_like(sht.Yd)
+    Ym[sht.indx( 2, 0),:] = 3*sht.x * np.sqrt(5/4./np.pi)
+    Ym[sht.indx(10,10),:] = -4.19758*sht.x*(1-sht.x**2)**4*np.sqrt(21/4./np.pi)
+    Yd = sht.Yd
+    for ell,m in zip([2,10],[0,10]):
+        lbs,mys,j = "","",sht.indx(ell,m)
+        for i in ii: lbs+= " {:12.4e}".format(Ym[j,i])
+        for i in ii: mys+= " {:12.4e}".format(Yd[j,i])
+        print("({:2d},{:2d}):".format(ell,m))
+        print("\t"+lbs)
+        print("\t"+mys)
