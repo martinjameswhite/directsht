@@ -42,7 +42,7 @@ def ext_der_slow_recurrence(Nl,xx,Yv,Yd):
         for m in range(1,ell+1):
             i0,i1     = indx(ell,m),indx(ell-1,m)
             fact      = np.sqrt( float(ell-m)/(ell+m) )
-            Yd[i0,:]  = ell*xx*Yv[i0,:]-(ell+m)*fact*Yv[i1,:]
+            Yd[i0,:]  = (ell+m)*fact*Yv[i1,:]-ell*xx*Yv[i0,:]
             Yd[i0,:] /= omx2
     return(Yd)
     #
