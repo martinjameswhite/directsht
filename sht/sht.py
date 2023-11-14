@@ -7,7 +7,8 @@
 #
 import numpy as np
 import numba as nb
-
+import sht.interpolation as interp
+from   jax import device_put, vmap, jit
 
 @nb.njit
 def ext_slow_recurrence(Nl,xx,Ylm):
@@ -68,7 +69,31 @@ class DirectSHT:
     def __call__(self,theta,phi,wt):
         """Returns alm for a collection of points at (theta,phi), in
         radians, with weights wt."""
-        return(0)
+        #TODO: Check that theta,phi,wt are all the same length.
+        #TODO: Check that theta,phi are in the right range.
+        #TODO: Code up phi dependence
+
+        # Sort the data in ascending order of theta
+        sorted_indices = np.argsort(theta)
+        theta_data_sorted = theta[sorted_indices]
+        # TODO: Convert from x to theta_samples!
+        theta_samples = self.x
+        w_i_sorted = wt[sorted_indices]
+
+        # Calculate t = theta_data-theta_sample[i] for each theta_data
+        t = interp.precompute_t(theta_samples, theta_data_sorted)
+
+        # We now sum up all w_p f(t) in each spline region i, for f(t) = (2t+1)(1-t)^2, t(1-t)^2, t^2(3-2t), t^2(t-1)
+        vs = interp.precompute_vs(theta_samples, theta_data_sorted, w_i_sorted, t)
+
+        # Put the Ylm and dYlm tables in device memory for a speed boost
+        Ylm_grid_jax = device_put(self.Yv)
+        dYlm_grid_jax = device_put(self.Yd)
+
+        # Get a grid of all alm's -- best run on a GPU!
+        get_all_alms = vmap(jit(interp.get_alm), in_axes=(0, 0, None))
+        alm_grid = get_all_alms(Ylm_grid_jax, dYlm_grid_jax, vs)
+        return alm_grid
         #
     def indx(self,ell,m):
         """The index in the grid storing Ylm for ell>=0, 0<=m<=ell."""

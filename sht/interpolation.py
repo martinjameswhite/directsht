@@ -1,68 +1,7 @@
 import numpy as np
 from numba import njit
-
-@njit
-def cubic_spline(x, y, ind, t_0, t_1, t_2, t_3, endpoints="natural"):
-    """
-    Cubic spline interpolation routine (inspired by that in JAX_COSMO) adapted to the needs of direct_SHT
-    :param x: 1d numpy array of x samples
-    :param y: 1d numpy array of y samples
-    :param ind: 1d numpy array of sample indices -- almost trivial np.arange(len(x))
-    :param t_0: 1d numpy array with (data-sample[i])^0 for each spline bin
-    :param t_1: 1d numpy array with (data-sample[i])^1 for each spline bin
-    :param t_2: 1d numpy array with (data-sample[i])^2 for each spline bin
-    :param t_3: 1d numpy array with (data-sample[i])^3 for each spline bin
-    :param endpoints: str. "natural" or "not-a-knot"
-    :return: 1d numpy array of interpolated values
-    """
-
-    n_data = len(x)
-    # Difference vectors
-    h = np.diff(x)  # x[i+1] - x[i] for i=0,...,n-1
-    p = np.diff(y)  # y[i+1] - y[i]
-
-    # Special values for the first and last equations
-    zero = np.array([0.0])
-    one = np.array([1.0])
-    A00 = one if endpoints == "natural" else np.array([h[1]])
-    A01 = zero if endpoints == "natural" else np.array([-(h[0] + h[1])])
-    A02 = zero if endpoints == "natural" else np.array([h[0]])
-    ANN = one if endpoints == "natural" else np.array([h[-2]])
-    AN1 = (
-        -one if endpoints == "natural" else np.array([-(h[-2] + h[-1])])
-    )  # A[N, N-1]
-    AN2 = zero if endpoints == "natural" else np.array([h[-1]])  # A[N, N-2]
-
-    # Construct the tri-diagonal matrix A
-    A = np.diag(np.concatenate((A00, 2 * (h[:-1] + h[1:]), ANN)))
-    upper_diag1 = np.diag(np.concatenate((A01, h[1:])), k=1)
-    upper_diag2 = np.diag(np.concatenate((A02, np.zeros(n_data - 3))), k=2)
-    lower_diag1 = np.diag(np.concatenate((h[:-1], AN1)), k=-1)
-    lower_diag2 = np.diag(np.concatenate((np.zeros(n_data - 3), AN2)), k=-2)
-    A += upper_diag1 + upper_diag2 + lower_diag1 + lower_diag2
-
-    # Construct RHS vector s
-    center = 3 * (p[1:] / h[1:] - p[:-1] / h[:-1])
-    s = np.concatenate((zero, center, zero))
-    # Compute spline coefficients by solving the system
-    coefficients = np.linalg.solve(A, s)
-
-    # Compute the spline coefficients for a given x
-    knots = x
-
-    # Include the right endpoint in spline piece C[m-1]
-    ind = np.clip(ind, 0, len(knots) - 2)
-    h = np.diff(knots)[ind]
-
-    c = coefficients[ind]
-    c1 = coefficients[ind + 1]
-    a = y[ind]
-    a1 = y[ind + 1]
-    b = (a1 - a) / h - (2 * c + c1) * h / 3.0
-    d = (c1 - c) / (3 * h)
-
-    # Evaluation of the spline.
-    return a * t_0 + b * t_1 + c * t_2 + d * t_3
+from jax import device_put
+import jax.numpy as jnp
 
 @njit
 def get_sum(x_samples, x_data, y_data):
@@ -82,3 +21,39 @@ def get_sum(x_samples, x_data, y_data):
         else:
             j+=1
     return sum
+
+def precompute_t(theta_samples, theta_data_sorted):
+    """
+    Calculate t = theta_data-theta_sample[i] for each theta data point
+    :param theta_samples: a 1d numpy array of theta samples
+    :param theta_data_sorted: a 1d numpy array of theta data points
+    :return: a 1D numpy array the size of theta_data_sorted
+    """
+    which_spline_idx = np.digitize(theta_data_sorted, theta_samples) - 1
+    return (theta_data_sorted - theta_samples[which_spline_idx])
+
+def precompute_vs(theta_samples, theta_data_sorted, w_i_sorted, t):
+    '''
+    Calculate the v_{i,j} in the direct_SHT algorithm and move them to the device where JAX will operate (e.g. GPU)
+    :param theta_samples: a 1d numpy array of theta samples
+    :param theta_data_sorted: a 1d numpy array of theta data points
+    :param w_i_sorted: a 1d numpy array of weights for each theta data point
+    :param t: a 1d numpy array of t = theta_data-theta_sample[i] for each theta data point
+    :return: a list of four 1D numpy arrays of the v_{i,j} in the direct_SHT algorithm
+    '''
+    # We now sum up all the w_p f(t) in each spline region i, where f(t) = (2t+1)(1-t)^2, t(1-t)^2, t^2(3-2t), t^2(t-1)
+    v_0 = device_put(get_sum(theta_samples, theta_data_sorted, w_i_sorted * (2*t + 1) * (1-t)**2))
+    v_1 = device_put(get_sum(theta_samples, theta_data_sorted, w_i_sorted * t * (1-t)**2))
+    v_2 = device_put(get_sum(theta_samples, theta_data_sorted, w_i_sorted * t**2 * (3-2*t)))
+    v_3 = device_put(get_sum(theta_samples, theta_data_sorted, w_i_sorted * t**2 * (t-1)))
+    return [v_0, v_1, v_2, v_3]
+
+def get_alm(Ylm, dYlm, vs):
+    """
+    The key function: get alm by summing over all interpolated weighted Y_lm's. Interpolation uses cubic Hermite splines
+    :param Ylm: 1d numpy array of Ylm samples. Ideally, in device memory already
+    :param dYlm: 1d numpy array of first derivatives of Ylm at sample points. Ideally, in device memory already
+    :param vs: a list of four 1D numpy arrays of the v_{i,j} in the direct_SHT algorithm
+    :return: a 1D numpy array with the alm value
+    """
+    return jnp.sum(Ylm[:-1] * vs[0][:-1] + dYlm[:-1] * vs[1][:-1] + Ylm[1:] * vs[2][1:] + dYlm[1:] * vs[3][1:])
