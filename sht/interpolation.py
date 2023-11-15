@@ -1,7 +1,14 @@
 import numpy as np
 from numba import njit
-from jax import device_put
-import jax.numpy as jnp
+
+try:
+    jax_present = True
+    from jax import device_put
+    import jax.numpy as jnp
+except ImportError:
+    jax_present = False
+    print("JAX not found. Falling back to NumPy.")
+    import numpy as jnp
 
 @njit
 def get_sum(x_samples, x_data, y_data):
@@ -42,10 +49,17 @@ def precompute_vs(theta_samples, theta_data_sorted, w_i_sorted, t):
     :return: a list of four 1D numpy arrays of the v_{i,j} in the direct_SHT algorithm
     '''
     # We now sum up all the w_p f(t) in each spline region i, where f(t) = (2t+1)(1-t)^2, t(1-t)^2, t^2(3-2t), t^2(t-1)
-    v_0 = device_put(get_sum(theta_samples, theta_data_sorted, w_i_sorted * (2*t + 1) * (1-t)**2))
-    v_1 = device_put(get_sum(theta_samples, theta_data_sorted, w_i_sorted * t * (1-t)**2))
-    v_2 = device_put(get_sum(theta_samples, theta_data_sorted, w_i_sorted * t**2 * (3-2*t)))
-    v_3 = device_put(get_sum(theta_samples, theta_data_sorted, w_i_sorted * t**2 * (t-1)))
+    v_0 = get_sum(theta_samples, theta_data_sorted, w_i_sorted * (2*t + 1) * (1-t)**2)
+    v_1 = get_sum(theta_samples, theta_data_sorted, w_i_sorted * t * (1-t)**2)
+    v_2 = get_sum(theta_samples, theta_data_sorted, w_i_sorted * t**2 * (3-2*t))
+    v_3 = get_sum(theta_samples, theta_data_sorted, w_i_sorted * t**2 * (t-1))
+
+    if jax_present:
+        # Move arrays to GPU memory
+        v_0 = device_put(v_0)
+        v_1 = device_put(v_1)
+        v_2 = device_put(v_2)
+        v_3 = device_put(v_3)
     return [v_0, v_1, v_2, v_3]
 
 def get_alm(Ylm, dYlm, vs):

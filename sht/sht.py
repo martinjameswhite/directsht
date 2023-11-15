@@ -8,7 +8,14 @@
 import numpy as np
 import numba as nb
 import sht.interpolation as interp
-from   jax import device_put, vmap, jit
+
+try:
+    jax_present = True
+    from   jax import device_put, vmap, jit
+except ImportError:
+    jax_present = False
+    print("JAX not found. Falling back to NumPy.")
+
 
 @nb.njit
 def ext_slow_recurrence(Nl,xx,Ylm):
@@ -86,13 +93,19 @@ class DirectSHT:
         # We now sum up all w_p f(t) in each spline region i, for f(t) = (2t+1)(1-t)^2, t(1-t)^2, t^2(3-2t), t^2(t-1)
         vs = interp.precompute_vs(theta_samples, theta_data_sorted, w_i_sorted, t)
 
-        # Put the Ylm and dYlm tables in device memory for a speed boost
-        Ylm_grid_jax = device_put(self.Yv)
-        dYlm_grid_jax = device_put(self.Yd)
+        if jax_present:
+            # Get a grid of all alm's -- best run on a GPU!
+            get_all_alms_w_jax = vmap(jit(interp.get_alm), in_axes=(0, 0, None))
+            # Notice we put the Ylm and dYlm tables in device memory for a speed boost
+            alm_grid = get_all_alms_w_jax(device_put(self.Yv), device_put(self.Yd), vs)
+        else:
+            # JIT compile the get_alm function and vectorize it
+            get_alm_jitted = nb.jit(nopython=True)(interp.get_alm)
 
-        # Get a grid of all alm's -- best run on a GPU!
-        get_all_alms = vmap(jit(interp.get_alm), in_axes=(0, 0, None))
-        alm_grid = get_all_alms(Ylm_grid_jax, dYlm_grid_jax, vs)
+            alm_grid = np.empty_like(self.Yv[:,0])
+            for i, (Ylm, dYlm) in enumerate(zip(self.Yv, self.Yd)):
+                alm_grid[i] = get_alm_jitted(Ylm, dYlm, vs)
+
         return alm_grid
         #
     def indx(self,ell,m):
