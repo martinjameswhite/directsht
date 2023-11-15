@@ -7,7 +7,7 @@
 #
 import numpy as np
 import numba as nb
-import sht.interpolation as interp
+import interp_funcs as interp
 
 try:
     jax_present = True
