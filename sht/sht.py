@@ -7,7 +7,7 @@
 #
 import numpy as np
 import numba as nb
-import sht.interp_funcs as interp
+import interp_funcs as interp
 import sht.utils as utils
 import time
 
