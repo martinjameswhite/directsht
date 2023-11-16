@@ -1,13 +1,15 @@
 #!/usr/bin/env python
 #
 # Test the SHT class against the SciPy versions.
+# Checks the function values and first derivatives
+# for Ylm(x=cos[theta],0).
 #
 #
 import numpy as np
 import numba as nb
 import time
 from   sht import DirectSHT
-from   scipy.interpolate import interp1d
+
 
 
 
