@@ -8,6 +8,8 @@
 import numpy as np
 import numba as nb
 import sht.interp_funcs as interp
+import sht.utils as utils
+import time
 
 try:
     jax_present = True
@@ -76,43 +78,58 @@ class DirectSHT:
     def __call__(self,theta,phi,wt):
         """Returns alm for a collection of points at (theta,phi), in
         radians, with weights wt."""
-        #TODO: Check that theta,phi,wt are all the same length.
-        #TODO: Check that theta,phi are in the right range.
+        assert len(theta)==len(phi) and len(phi)==len(wt), "theta,phi,wt must all be the same length."
+        assert np.all( (theta>=0) & (theta<=np.pi) ), "theta must be in [0,pi]." #TODO: do we include the endpoints?
+        assert np.all( (phi>=0) & (phi<=2*np.pi) ), "phi must be in [0,2pi]." #TODO: do we include the endpoints?
+        t0= time.time()
 
         # Sort the data in ascending order of theta
         sorted_indices = np.argsort(theta)
         theta_data_sorted = theta[sorted_indices]
-        # TODO: Convert from x to theta_samples!
+        # TODO: Convert from [0,1] to theta!
         theta_samples = self.x
         w_i_sorted = wt[sorted_indices]
         phi_data_sorted = phi[sorted_indices]
+        t1 = time.time()
+        print("Sorting took ",t1-t0," seconds.",flush=True)
 
         # Find which spline region each point falls into
         spline_idx = np.digitize(theta_data_sorted, theta_samples) - 1
         t = theta_data_sorted - theta_samples[spline_idx]
 
-        # We now sum up all w_p f(t) in each spline region i, for f(t) = (2t+1)(1-t)^2, t(1-t)^2, t^2(3-2t), t^2(t-1)
+        # We now sum up all w_p f(t) in each spline region i
         ms = np.arange(self.Nell, dtype=int)
-        vs_real = interp.precompute_vs(len(theta_samples), spline_idx, phi_data_sorted, w_i_sorted, t, ms, 'cos')
-        vs_imag = interp.precompute_vs(len(theta_samples), spline_idx, phi_data_sorted, w_i_sorted, t, ms, 'sin')
+        vs_real, vs_imag = [interp.precompute_vs(len(theta_samples), spline_idx, phi_data_sorted,
+                                                 w_i_sorted, t, ms, which_part) for which_part in ['cos', 'sin']]
 
-        '''
+        t2 = time.time()
+        print("Precomputing vs took ",t2-t1," seconds.",flush=True)
+
+        # TODO: CAREFUL! This does not match the convention used in the SHT class above!!!
+        # Get the ordering of alm's in the array
+        ell_ordering, m_ordering = utils.getlm(self.Nell, len(self.Yv[:, 0]))
+
         if jax_present:
             # Get a grid of all alm's -- best run on a GPU!
-            get_all_alms_w_jax = vmap(jit(interp.get_alm), in_axes=(0, 0, None))
+            get_all_alms_w_jax = vmap(jit(interp.get_alm), in_axes=(0, 0, None, 0))
             # Notice we put the Ylm and dYlm tables in device memory for a speed boost
-            alm_grid = get_all_alms_w_jax(device_put(self.Yv), device_put(self.Yd), vs_real)
+            alm_grid_realpart = get_all_alms_w_jax(device_put(self.Yv), device_put(self.Yd), vs_real, m_ordering)
+            alm_grid_imagpart = get_all_alms_w_jax(device_put(self.Yv), device_put(self.Yd), vs_imag, m_ordering)
+            alm_grid = np.array(alm_grid_realpart) + 1j * np.array(alm_grid_imagpart)
+
         else:
             # JIT compile the get_alm function and vectorize it
             get_alm_jitted = nb.jit(nopython=True)(interp.get_alm)
 
-            alm_grid = np.empty_like(self.Yv[:,0])
-            for i, (Ylm, dYlm) in enumerate(zip(self.Yv, self.Yd)):
-                alm_grid[i] = get_alm_jitted(Ylm, dYlm, vs_real)
-
+            alm_grid = np.zeros(len(self.Yv[:,0]), dtype=complex)
+            vs_tot = vs_real + 1j * vs_imag
+            #TODO: parallelize this
+            for i, (Ylm, dYlm, m) in enumerate(zip(self.Yv, self.Yd, m_ordering)):
+                alm_grid[i] = get_alm_jitted(Ylm, dYlm, vs_tot, m)
+        t3 = time.time()
+        print("Computing alm's took ",t3-t2," seconds.",flush=True)
         return alm_grid
-        '''
-        return
+
         #
     def indx(self,ell,m):
         """The index in the grid storing Ylm for ell>=0, 0<=m<=ell."""

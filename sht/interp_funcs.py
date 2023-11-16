@@ -20,37 +20,34 @@ def precompute_vs(Nsamples_theta, bin_indices, phi_data_sorted, w_i_sorted, t, m
     :param t: a 1d numpy array of t = theta_data-theta_sample[i] for each theta data point
     :param ms: a 1d numpy array of m indices of the Ylm's
     :param which_part: 'cos' or 'sin' for the real or imaginary part of the phi dependence
-    :return: a list of four 1D numpy arrays of the v_{i,j} in the direct_SHT algorithm
+    :return: 3D numpy arrays of the v_{i,j}(m) in the direct_SHT algorithm
     '''
-    # We now sum up all the w_p f(t) in each spline region i
     Nbins = Nsamples_theta
-    v_0 = np.zeros((len(ms), Nsamples_theta)); v_1 = v_0.copy(); v_2 = v_0.copy(); v_3 = v_0.copy()
+
     input_1 = w_i_sorted * (2*t + 1) * (1-t)**2
     input_2 = w_i_sorted * t * (1-t)**2
     input_3 = w_i_sorted * t**2 * (3-2*t)
     input_4 = w_i_sorted * t**2 * (t-1)
+
+    vs = np.zeros((len(ms), Nsamples_theta, 4))
     for i, m in enumerate(ms):
         phi_dep = utils.get_phi_dep(phi_data_sorted, m, which_part)
-        v_0[i, :] = utils.bin_data(input_1 * phi_dep, bin_indices, Nbins)
-        v_1[i, :] = utils.bin_data(input_2 * phi_dep, bin_indices, Nbins)
-        v_2[i, :] = utils.bin_data(input_3 * phi_dep, bin_indices, Nbins)
-        v_3[i, :] = utils.bin_data(input_4 * phi_dep, bin_indices, Nbins)
+        for j, input in enumerate([input_1, input_2, input_3, input_4]):
+            vs[i, :, j] = utils.bin_data(input * phi_dep, bin_indices, Nbins)
 
     if jax_present:
         # Move arrays to GPU memory
-        v_0 = device_put(v_0)
-        v_1 = device_put(v_1)
-        v_2 = device_put(v_2)
-        v_3 = device_put(v_3)
-    return [v_0, v_1, v_2, v_3]
+        vs = device_put(vs)
+    return vs
 
 
-def get_alm(Ylm, dYlm, vs):
+def get_alm(Ylm, dYlm, vs, m):
     """
     The key function: get alm by summing over all interpolated weighted Y_lm's. Interpolation uses cubic Hermite splines
     :param Ylm: 1d numpy array of Ylm samples. Ideally, in device memory already
     :param dYlm: 1d numpy array of first derivatives of Ylm at sample points. Ideally, in device memory already
-    :param vs: a list of four 1D numpy arrays of the v_{i,j} in the direct_SHT algorithm
+    :param vs: np array of size (len(ms), Nsamples_theta, 4) with the v_{i,j}(m) in the direct_SHT algorithm
+    :param m: m value of the alm we want to calculate
     :return: a 1D numpy array with the alm value
     """
-    return jnp.sum(Ylm[:-1] * vs[0][:-1] + dYlm[:-1] * vs[1][:-1] + Ylm[1:] * vs[2][1:] + dYlm[1:] * vs[3][1:])
+    return jnp.sum(Ylm[:-1] * vs[m,:-1,0] + dYlm[:-1] * vs[m,:-1,1] + Ylm[1:] * vs[m,1:,2] + dYlm[1:] * vs[m,1:,3])
