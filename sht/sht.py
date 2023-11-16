@@ -7,7 +7,7 @@
 #
 import numpy as np
 import numba as nb
-import interp_funcs as interp
+import sht.interp_funcs as interp
 
 try:
     jax_present = True
@@ -78,7 +78,6 @@ class DirectSHT:
         radians, with weights wt."""
         #TODO: Check that theta,phi,wt are all the same length.
         #TODO: Check that theta,phi are in the right range.
-        #TODO: Code up phi dependence
 
         # Sort the data in ascending order of theta
         sorted_indices = np.argsort(theta)
@@ -86,27 +85,34 @@ class DirectSHT:
         # TODO: Convert from x to theta_samples!
         theta_samples = self.x
         w_i_sorted = wt[sorted_indices]
+        phi_data_sorted = phi[sorted_indices]
 
-        # Calculate t = theta_data-theta_sample[i] for each theta_data
-        t = interp.precompute_t(theta_samples, theta_data_sorted)
+        # Find which spline region each point falls into
+        spline_idx = np.digitize(theta_data_sorted, theta_samples) - 1
+        t = theta_data_sorted - theta_samples[spline_idx]
 
         # We now sum up all w_p f(t) in each spline region i, for f(t) = (2t+1)(1-t)^2, t(1-t)^2, t^2(3-2t), t^2(t-1)
-        vs = interp.precompute_vs(theta_samples, theta_data_sorted, w_i_sorted, t)
+        ms = np.arange(self.Nell, dtype=int)
+        vs_real = interp.precompute_vs(len(theta_samples), spline_idx, phi_data_sorted, w_i_sorted, t, ms, 'cos')
+        vs_imag = interp.precompute_vs(len(theta_samples), spline_idx, phi_data_sorted, w_i_sorted, t, ms, 'sin')
 
+        '''
         if jax_present:
             # Get a grid of all alm's -- best run on a GPU!
             get_all_alms_w_jax = vmap(jit(interp.get_alm), in_axes=(0, 0, None))
             # Notice we put the Ylm and dYlm tables in device memory for a speed boost
-            alm_grid = get_all_alms_w_jax(device_put(self.Yv), device_put(self.Yd), vs)
+            alm_grid = get_all_alms_w_jax(device_put(self.Yv), device_put(self.Yd), vs_real)
         else:
             # JIT compile the get_alm function and vectorize it
             get_alm_jitted = nb.jit(nopython=True)(interp.get_alm)
 
             alm_grid = np.empty_like(self.Yv[:,0])
             for i, (Ylm, dYlm) in enumerate(zip(self.Yv, self.Yd)):
-                alm_grid[i] = get_alm_jitted(Ylm, dYlm, vs)
+                alm_grid[i] = get_alm_jitted(Ylm, dYlm, vs_real)
 
         return alm_grid
+        '''
+        return
         #
     def indx(self,ell,m):
         """The index in the grid storing Ylm for ell>=0, 0<=m<=ell."""

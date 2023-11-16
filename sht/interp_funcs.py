@@ -1,58 +1,40 @@
 import numpy as np
-from numba import njit
+import sht.utils as utils
 
 try:
     jax_present = True
-    from jax import device_put
+    from jax import device_put, vmap, jit
     import jax.numpy as jnp
 except ImportError:
     jax_present = False
     print("JAX not found. Falling back to NumPy.")
     import numpy as jnp
 
-@njit
-def get_sum(x_samples, x_data, y_data):
-    """
-    Calculate the v_{i,j} in the direct_SHT algorithm. Essentially, this entails summing all data points y_data
-    with x_data in the range [x_samples[i], x_samples[i+1])
-    :param x_samples: a 1d numpy array of x samples
-    :param x_data: a 1d numpy array of x data points
-    :param y_data: a 1d numpy array of y data points
-    :return: a 1D numpy array of the sum of y_data points in each bin. This has same length as x_samples
-    """
-    sum = np.zeros_like(x_samples)
-    j=0
-    for x_d, y_d in zip(x_data, y_data):
-        if x_d<x_samples[j+1]:
-            sum[j] += y_d
-        else:
-            j+=1
-    return sum
-
-def precompute_t(theta_samples, theta_data_sorted):
-    """
-    Calculate t = theta_data-theta_sample[i] for each theta data point
-    :param theta_samples: a 1d numpy array of theta samples
-    :param theta_data_sorted: a 1d numpy array of theta data points
-    :return: a 1D numpy array the size of theta_data_sorted
-    """
-    which_spline_idx = np.digitize(theta_data_sorted, theta_samples) - 1
-    return (theta_data_sorted - theta_samples[which_spline_idx])
-
-def precompute_vs(theta_samples, theta_data_sorted, w_i_sorted, t):
+def precompute_vs(Nsamples_theta, bin_indices, phi_data_sorted, w_i_sorted, t, ms, which_part):
     '''
     Calculate the v_{i,j} in the direct_SHT algorithm and move them to the device where JAX will operate (e.g. GPU)
-    :param theta_samples: a 1d numpy array of theta samples
-    :param theta_data_sorted: a 1d numpy array of theta data points
+    :param Nsamples_theta : number of theta samples
+    :param bin_indices: a 1d numpy array with indices of what bin each data point belongs to
+    :param phi_data_sorted: a 1d numpy array of phi data points (same length as theta_data_sorted)
     :param w_i_sorted: a 1d numpy array of weights for each theta data point
     :param t: a 1d numpy array of t = theta_data-theta_sample[i] for each theta data point
+    :param ms: a 1d numpy array of m indices of the Ylm's
+    :param which_part: 'cos' or 'sin' for the real or imaginary part of the phi dependence
     :return: a list of four 1D numpy arrays of the v_{i,j} in the direct_SHT algorithm
     '''
-    # We now sum up all the w_p f(t) in each spline region i, where f(t) = (2t+1)(1-t)^2, t(1-t)^2, t^2(3-2t), t^2(t-1)
-    v_0 = get_sum(theta_samples, theta_data_sorted, w_i_sorted * (2*t + 1) * (1-t)**2)
-    v_1 = get_sum(theta_samples, theta_data_sorted, w_i_sorted * t * (1-t)**2)
-    v_2 = get_sum(theta_samples, theta_data_sorted, w_i_sorted * t**2 * (3-2*t))
-    v_3 = get_sum(theta_samples, theta_data_sorted, w_i_sorted * t**2 * (t-1))
+    # We now sum up all the w_p f(t) in each spline region i
+    Nbins = Nsamples_theta
+    v_0 = np.zeros((len(ms), Nsamples_theta)); v_1 = v_0.copy(); v_2 = v_0.copy(); v_3 = v_0.copy()
+    input_1 = w_i_sorted * (2*t + 1) * (1-t)**2
+    input_2 = w_i_sorted * t * (1-t)**2
+    input_3 = w_i_sorted * t**2 * (3-2*t)
+    input_4 = w_i_sorted * t**2 * (t-1)
+    for i, m in enumerate(ms):
+        phi_dep = utils.get_phi_dep(phi_data_sorted, m, which_part)
+        v_0[i, :] = utils.bin_data(input_1 * phi_dep, bin_indices, Nbins)
+        v_1[i, :] = utils.bin_data(input_2 * phi_dep, bin_indices, Nbins)
+        v_2[i, :] = utils.bin_data(input_3 * phi_dep, bin_indices, Nbins)
+        v_3[i, :] = utils.bin_data(input_4 * phi_dep, bin_indices, Nbins)
 
     if jax_present:
         # Move arrays to GPU memory
@@ -61,6 +43,7 @@ def precompute_vs(theta_samples, theta_data_sorted, w_i_sorted, t):
         v_2 = device_put(v_2)
         v_3 = device_put(v_3)
     return [v_0, v_1, v_2, v_3]
+
 
 def get_alm(Ylm, dYlm, vs):
     """
