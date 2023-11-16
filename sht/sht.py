@@ -8,7 +8,7 @@
 import numpy as np
 import numba as nb
 import interp_funcs as interp
-import sht.utils as utils
+import utils
 import time
 
 try:

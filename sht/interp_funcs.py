@@ -1,5 +1,5 @@
 import numpy as np
-import sht.utils as utils
+import utils
 
 try:
     jax_present = True
