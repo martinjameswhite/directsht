@@ -10,6 +10,7 @@ except ImportError:
     print("JAX not found. Falling back to NumPy.")
     import numpy as jnp
 
+default_dtype = 'float64'
 @nb.njit(parallel=True)
 def bin_data(data, bin_indices, Nbins):
     '''
@@ -18,7 +19,7 @@ def bin_data(data, bin_indices, Nbins):
     :param bin_indices: 1D np array with the bin index for each data point
     :param Nbins: number of bins
     '''
-    bin_sums = np.zeros(Nbins, dtype=np.float64)
+    bin_sums = np.zeros(Nbins, dtype=default_dtype)
     for i in nb.prange(len(data)):
         bin_sums[bin_indices[i]] += data[i]
     return bin_sums
@@ -31,24 +32,31 @@ def get_phi_dep(phi_data_sorted, m, which_part):
     :param which_part: 'cos' or 'sin' for the real or imaginary part of the phi dependence
     :return: a 1D numpy array of the real or imaginary part of the phi dependence of the Ylm's at each phi data point
     '''
-    if which_part == 'cos':
-        fn = cosmphi
-    elif which_part == 'sin':
-        fn = sinmphi
+    fn = function_map.get(which_part)
     # JIT compile the function and vectorize it
     if jax_present:
         vect_fn = vmap(jit(fn), in_axes=(0, None))
-        out = np.array(vect_fn(phi_data_sorted, m))
+        out = np.array(vect_fn(phi_data_sorted, m), dtype=default_dtype)
     else:
-        vect_fn = nb.jit(nopython=True)(fn)
-        out = vect_fn(phi_data_sorted, m)
+        out = fn(phi_data_sorted, m)
     return out
 
-def cosmphi(phi, m):
+@nb.njit(parallel=True)
+def cosmphi_np(phi, m):
+    return np.cos(m * phi)
+@nb.njit(parallel=True)
+def sinmphi_np(phi, m):
+    return np.sin(m * phi)
+def cosmphi_jax(phi, m):
     return jnp.cos(m * phi)
-def sinmphi(phi, m):
+def sinmphi_jax(phi, m):
     return jnp.sin(m * phi)
 
+# Map functions based on which_part
+function_map = {
+    'cos': cosmphi_jax if jax_present else cosmphi_np,
+    'sin': sinmphi_jax if jax_present else sinmphi_np,
+}
 def getlm(lmax, szalm, i=None):
     """Get the l and m from index and lmax. From Healpy
 

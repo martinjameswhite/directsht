@@ -18,6 +18,7 @@ except ImportError:
     jax_present = False
     print("JAX not found. Falling back to NumPy.")
 
+default_dtype = 'float64'
 @nb.njit
 def ext_slow_recurrence(Nl,xx,Ylm):
     """Pull out the slow, multi-loop piece of the recurrence.  In
@@ -85,7 +86,6 @@ class DirectSHT:
         """
         assert len(theta)==len(phi) and len(phi)==len(wt), "theta,phi,wt must all be the same length."
         assert np.all( (theta>=0) & (theta<=np.pi) ), "theta must be in [0,pi)."
-        t0= time.time()
 
         # Get the indexing of ell and m in the Healpix convention for later use
         ell_ordering, m_ordering = utils.getlm(self.Nell, len(self.Yv[:, 0]))
@@ -115,6 +115,7 @@ class DirectSHT:
             dYv_jax = device_put(self.Yd)
 
         for x, par_fact, idx in which_case:
+            t0 = time.time()
             # Sort the data in ascending order of theta
             sorted_idx = np.argsort(x)
             x_data_sorted = x[sorted_idx]; w_i_sorted = wt[idx][sorted_idx]; phi_data_sorted = phi[idx][sorted_idx]
@@ -150,7 +151,7 @@ class DirectSHT:
                 # JIT compile the get_alm function and vectorize it
                 get_alm_jitted = nb.jit(nopython=True)(interp.get_alm)
 
-                alm_grid = np.zeros(len(self.Yv[:,0]), dtype=complex)
+                alm_grid = np.zeros(len(self.Yv[:,0]), dtype='complex128')
                 vs_tot = vs_real - 1j * vs_imag
                 #TODO: parallelize this
                 for i, (Ylm, dYlm, m) in enumerate(zip(self.Yv, self.Yd, m_ordering)):
@@ -194,9 +195,9 @@ class DirectSHT:
         Returns x,Y[ell,m,x=Cos[theta],0] without the sqrt{(2ell+1)/4pi}
         normalization (that is applied in __init__"""
         # Set up a regular grid of x values.
-        xx = np.arange(Nx)/float(Nx)
+        xx = np.arange(Nx, dtype=default_dtype)/float(Nx)
         sx = np.sqrt(1-xx**2)
-        Plm= np.zeros( ((Nl*(Nl+1))//2,Nx) )
+        Plm= np.zeros( ((Nl*(Nl+1))//2,Nx), dtype=default_dtype)
         #
         # First we do the m=0 case.
         Plm[self.indx(0,0),:] = np.ones_like(xx)
@@ -225,7 +226,7 @@ class DirectSHT:
         """Use recurrence relations to compute a table of derivatives of
         Ylm[cos(theta),0] for ell>=0, m>=0, x=>0.  Assumes the Ylm table
         has already been built (passed as Yv)."""
-        Yd = np.zeros( ((Nl*(Nl+1))//2,xx.size) )
+        Yd = np.zeros( ((Nl*(Nl+1))//2,xx.size), dtype=default_dtype)
         Yd[self.indx(1,0),:] = np.ones_like(xx)
         # Do the case m=0 separately.
         for ell in range(2,Nl):

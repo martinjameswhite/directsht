@@ -10,6 +10,8 @@ except ImportError:
     print("JAX not found. Falling back to NumPy.")
     import numpy as jnp
 
+default_dtype = 'float64'
+
 def precompute_vs(Nsamples_theta,bin_indices,\
                   phi_data_sorted,w_i_sorted,t,ms,which_part):
     '''
@@ -33,7 +35,7 @@ def precompute_vs(Nsamples_theta,bin_indices,\
     input_3 = w_i_sorted * t**2 * (3-2*t)
     input_4 = w_i_sorted * t**2 * (t-1)
     #
-    vs = np.zeros((len(ms), Nsamples_theta, 4))
+    vs = np.zeros((len(ms), Nsamples_theta, 4), dtype=default_dtype)
     for i, m in enumerate(ms):
         phi_dep = utils.get_phi_dep(phi_data_sorted,m,which_part)
         for j, input in enumerate([input_1,input_2,input_3,input_4]):
