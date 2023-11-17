@@ -18,6 +18,7 @@ except ImportError:
     jax_present = False
     print("JAX not found. Falling back to NumPy.")
 
+
 default_dtype = 'float64'
 @nb.njit
 def ext_slow_recurrence(Nl,xx,Ylm):
@@ -161,14 +162,12 @@ class DirectSHT:
             alm_grid_tot += par_fact * alm_grid
             t3 = time.time()
             print("Computing alm's took ",t3-t2," seconds.",flush=True)
-
-        return alm_grid_tot
-
+        return(alm_grid_tot)
         #
     def indx(self,ell,m):
         """
         The index in the grid storing Ylm for ell>=0, 0<=m<=ell. Matches the Healpix convention.
-        Note: this should match the indexing in ext_slow_recurrence()
+        Note: this should match the indexing in ext_slow_recurrence and ext_der_slow_recurrence.
         """
         lmax = self.Nell-1
         ii = int(m * (2*lmax+1-m)/2 + ell)
