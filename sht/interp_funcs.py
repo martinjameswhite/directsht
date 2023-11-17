@@ -10,8 +10,6 @@ except ImportError:
     print("JAX not found. Falling back to NumPy.")
     import numpy as jnp
 
-
-
 def precompute_vs(Nsamples_theta,bin_indices,\
                   phi_data_sorted,w_i_sorted,t,ms,which_part):
     '''
@@ -23,7 +21,7 @@ def precompute_vs(Nsamples_theta,bin_indices,\
     :param phi_data_sorted: a 1d numpy array of phi data points \
            (same length as theta_data_sorted)
     :param w_i_sorted: a 1d numpy array of weights for each theta data point
-    :param t: a 1d numpy array of t = theta_data-theta_sample[i]
+    :param t: a 1d numpy array of t = x_data-x_sample[i]
     :param ms: a 1d numpy array of m indices of the Ylm's
     :param which_part: 'cos' or 'sin' for the real or imaginary part.
     :return: 3D numpy arrays of the v_{i,j}(m) in the direct_SHT algorithm
