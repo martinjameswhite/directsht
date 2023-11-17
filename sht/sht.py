@@ -47,7 +47,7 @@ def ext_der_slow_recurrence(Nl,xx,Yv,Yd):
     """Pull out the slow, multi-loop piece of the recurrence for the
     derivatives."""
     # This should match the convention used in the SHT class below.
-    indx = lambda ell,m:  ( ell*(ell+1) )//2 + m
+    indx = lambda ell,m:  int(m * (2 * (Nl-1) + 1 - m) / 2 + ell)
     omx2 = 1.0-xx**2
     for ell in range(Nl):
         for m in range(1,ell+1):
