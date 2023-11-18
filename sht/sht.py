@@ -75,7 +75,7 @@ class DirectSHT:
                 Yd[ii,:] *= fact
         self.x,self.Yv,self.Yd = xx,Yv,Yd
         #
-    def __call__(self,theta,phi,wt,verbose=True):
+    def __call__(self,theta,phi,wt,reg_factor=1.,verbose=True):
         """
         Returns alm for a collection of real-valued points at (theta,phi),
         in radians, with weights wt.
@@ -84,6 +84,8 @@ class DirectSHT:
         :param phi: 1D numpy array of phi values for each point.
          Must be between [0,2pi].
         :param wt: 1D numpy array of weights for each point.
+        :param reg_factor: Scaling to apply to weights to avoid numerical over/underflow. It gets removed at the end.
+        :param verbose: if True, print out timing information.
         :return: alm in the Healpix indexing convention,
                  i.e., complex coefficients alm[m*(2*lmax+1-m)/2+l]
                  with l in [0, lmax] and m in [0, l]
@@ -92,6 +94,9 @@ class DirectSHT:
                len(phi)==len(wt),"theta,phi,wt must be the same length."
         assert np.all( (theta>=0) & (theta<np.pi) ),\
                "theta must be in [0,pi)."
+
+        # Multiply the weights by a regularization factor to avoid numerical under/overflow
+        wt*= reg_factor
         # Get the indexing of ell and m in the Healpix convention for
         # later use
         ell_ordering,m_ordering = utils.getlm(self.Nell,len(self.Yv[:, 0]))
@@ -172,7 +177,7 @@ class DirectSHT:
             t3 = time.time()
             if verbose:
                 print("Computing alm's took ",t3-t2," seconds.",flush=True)
-        return(alm_grid_tot)
+        return(alm_grid_tot/reg_factor)
         #
     def indx(self,ell,m):
         """
