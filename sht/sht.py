@@ -68,8 +68,9 @@ class DirectSHT:
         :param xmax:  Maximum value of |cos(theta)| to compute.
         """
         self.Nell, self.Nx, self.xmax = Nell, Nx, xmax
-        xx,Yv = self.compute_Plm_table(Nell,Nx,xmax)
-        Yd    = self.compute_der_table(Nell,xx,Yv)
+        xx = np.arange(Nx,dtype='float64')/float(Nx) * xmax
+        Yv = self.compute_Plm_table(Nell,xx)
+        Yd = self.compute_der_table(Nell,xx,Yv)
         # And finally put in the (2ell+1)/4pi normalization:
         for ell in range(Nell):
             fact = np.sqrt( (2*ell+1)/4./np.pi )
@@ -241,18 +242,17 @@ class DirectSHT:
         yx = self.Yv[jj,i0]*s0+self.Yd[jj,i0]*s1*dx +\
              self.Yv[jj,i1]*s2+self.Yd[jj,i1]*s3*dx
         return(yx)
-    def compute_Plm_table(self,Nl,Nx,xmax):
+    def compute_Plm_table(self,Nl,xx):
         """Use recurrence relations to compute a table of Ylm[cos(theta),0]
-        for ell>=0, m>=0, x=>0.  Can use symmetries to get m<0 and/or x<0,
+        for ell>=0, m>=0, x>=0.  Can use symmetries to get m<0 and/or x<0,
         viz. (-1)^m for m<0 and (-1)^(ell-m) for x<0.
-        :param  Nl: Number of ells in the derivative grid.
-        :param  Nx: Number of x grid points.
-        :param xmax:Maximum |cos(theta)| to compute.
-        :return x,Y[ell,m,x=Cos[theta],0] without the sqrt{(2ell+1)/4pi}
+        :param  Nl: Number of ells (and hence m's) in the grid.
+        :param  xx: Array of x points (non-negative and increasing).
+        :return Y[ell,m,x=Cos[theta],0] without the sqrt{(2ell+1)/4pi}
         normalization (that is applied in __init__)
         """
         # Set up a regular grid of x values.
-        xx = np.arange(Nx, dtype='float64')/float(Nx) * xmax
+        Nx = xx.size
         sx = np.sqrt(1-xx**2)
         Plm= np.zeros( ((Nl*(Nl+1))//2,Nx), dtype='float64')
         #
@@ -277,7 +277,7 @@ class DirectSHT:
         # First a dummy, warmup run to JIT compile, then the real thing.
         _   = ext_slow_recurrence( 1,xx,Plm)
         Plm = ext_slow_recurrence(Nl,xx,Plm)
-        return( (xx,Plm) )
+        return(Plm)
         #
     def compute_der_table(self,Nl,xx,Yv):
         """Use recurrence relations to compute a table of derivatives of
