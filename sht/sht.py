@@ -62,7 +62,10 @@ def ext_der_slow_recurrence(Nl,xx,Yv,Yd):
 class DirectSHT:
     """Brute-force spherical harmonic transforms."""
     def __init__(self,Nell,Nx):
-        """Initialize the class, build the interpolation tables."""
+        """Initialize the class, build the interpolation tables.
+        :param  Nell: Number of ells, and hence ms.
+        :param  Nx:   Number of x grid points.
+        """
         self.Nell, self.Nx = Nell, Nx
         xx,Yv = self.compute_Plm_table(Nell,Nx)
         Yd    = self.compute_der_table(Nell,xx,Yv)
@@ -192,6 +195,9 @@ class DirectSHT:
         Matches the Healpix convention.
         Note: this should match the indexing in ext_slow_recurrence
         and ext_der_slow_recurrence.
+        :param  ell: ell value to return.
+        :param  m:   m value to return.
+        :return ii:  Index value in the value and derivatives grids.
         """
         lmax = self.Nell-1
         ii = int(m * (2*lmax+1-m)/2 + ell)
@@ -211,12 +217,38 @@ class DirectSHT:
                 Ylm[i0,:]  *= fact1/(ell-m)
         return(Ylm)
         #
+    def interp_test(self,ell,m,xx):
+        """Interpolates Ylm(acos(x),0) at positions xx. Using a
+        cubic Hermite spline.  Assumes xx is sorted.
+        Used during development for code and convergence tests.
+        :param  ell: ell value to return.
+        :param  m:   m value to return.
+        :param  xx:  Array of cos(theta) values, assumed sorted.
+        :return yx:  Interpolated Y[ell,m,x=Cos[theta],0].
+        """
+        jj = self.indx(ell,m)
+        i1 = np.digitize(xx,self.x)
+        i0 = i1-1
+        dx = 0.5*(self.x[2]-self.x[0])
+        tt = (xx - self.x[i0])/dx
+        t1 = (tt-1.0)**2
+        t2 = tt**2
+        s0 = (1+2*tt)*t1
+        s1 = tt*t1
+        s2 = t2*(3-2*tt)
+        s3 = t2*(tt-1.0)
+        yx = self.Yv[jj,i0]*s0+self.Yd[jj,i0]*s1*dx +\
+             self.Yv[jj,i1]*s2+self.Yd[jj,i1]*s3*dx
+        return(yx)
     def compute_Plm_table(self,Nl,Nx):
         """Use recurrence relations to compute a table of Ylm[cos(theta),0]
         for ell>=0, m>=0, x=>0.  Can use symmetries to get m<0 and/or x<0,
         viz. (-1)^m for m<0 and (-1)^(ell-m) for x<0.
-        Returns x,Y[ell,m,x=Cos[theta],0] without the sqrt{(2ell+1)/4pi}
-        normalization (that is applied in __init__"""
+        :param  Nl: Number of ells in the derivative grid.
+        :param  Nx: Number of x grid points.
+        :return x,Y[ell,m,x=Cos[theta],0] without the sqrt{(2ell+1)/4pi}
+        normalization (that is applied in __init__)
+        """
         # Set up a regular grid of x values.
         xx = np.arange(Nx, dtype='float64')/float(Nx)
         sx = np.sqrt(1-xx**2)
@@ -247,8 +279,13 @@ class DirectSHT:
         #
     def compute_der_table(self,Nl,xx,Yv):
         """Use recurrence relations to compute a table of derivatives of
-        Ylm[cos(theta),0] for ell>=0, m>=0, x=>0.  Assumes the Ylm table
-        has already been built (passed as Yv)."""
+        Ylm[cos(theta),0] for ell>=0, m>=0, x=>0.
+        Assumes the Ylm table has already been built (passed as Yv).
+        :param  Nl: Number of ells in the derivative grid.
+        :param  xx: Values of cos(theta) at which to evaluate derivs.
+        :param  Yv: Already computed Ylm values.
+        :return Yd: The table of first derivatives.
+        """
         Yd = np.zeros( ((Nl*(Nl+1))//2,xx.size), dtype='float64')
         Yd[self.indx(1,0),:] = np.ones_like(xx)
         # Do the case m=0 separately.
