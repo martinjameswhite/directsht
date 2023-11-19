@@ -61,13 +61,14 @@ def ext_der_slow_recurrence(Nl,xx,Yv,Yd):
 
 class DirectSHT:
     """Brute-force spherical harmonic transforms."""
-    def __init__(self,Nell,Nx):
+    def __init__(self,Nell,Nx,xmax=0.9):
         """Initialize the class, build the interpolation tables.
         :param  Nell: Number of ells, and hence ms.
         :param  Nx:   Number of x grid points.
+        :param xmax:  Maximum value of |cos(theta)| to compute.
         """
-        self.Nell, self.Nx = Nell, Nx
-        xx,Yv = self.compute_Plm_table(Nell,Nx)
+        self.Nell, self.Nx, self.xmax = Nell, Nx, xmax
+        xx,Yv = self.compute_Plm_table(Nell,Nx,xmax)
         Yd    = self.compute_der_table(Nell,xx,Yv)
         # And finally put in the (2ell+1)/4pi normalization:
         for ell in range(Nell):
@@ -95,8 +96,8 @@ class DirectSHT:
         """
         assert len(theta)==len(phi) and \
                len(phi)==len(wt),"theta,phi,wt must be the same length."
-        assert np.all( (theta>=0) & (theta<np.pi) ),\
-               "theta must be in [0,pi)."
+        assert np.all( (theta>=0) & (theta<np.arccos(self.xmax)) ),\
+               "theta must be in [0,ACos[xmax])."
 
         # Multiply the weights by a regularization factor to avoid numerical
         # under/overflow
@@ -240,17 +241,18 @@ class DirectSHT:
         yx = self.Yv[jj,i0]*s0+self.Yd[jj,i0]*s1*dx +\
              self.Yv[jj,i1]*s2+self.Yd[jj,i1]*s3*dx
         return(yx)
-    def compute_Plm_table(self,Nl,Nx):
+    def compute_Plm_table(self,Nl,Nx,xmax):
         """Use recurrence relations to compute a table of Ylm[cos(theta),0]
         for ell>=0, m>=0, x=>0.  Can use symmetries to get m<0 and/or x<0,
         viz. (-1)^m for m<0 and (-1)^(ell-m) for x<0.
         :param  Nl: Number of ells in the derivative grid.
         :param  Nx: Number of x grid points.
+        :param xmax:Maximum |cos(theta)| to compute.
         :return x,Y[ell,m,x=Cos[theta],0] without the sqrt{(2ell+1)/4pi}
         normalization (that is applied in __init__)
         """
         # Set up a regular grid of x values.
-        xx = np.arange(Nx, dtype='float64')/float(Nx)
+        xx = np.arange(Nx, dtype='float64')/float(Nx) * xmax
         sx = np.sqrt(1-xx**2)
         Plm= np.zeros( ((Nl*(Nl+1))//2,Nx), dtype='float64')
         #
