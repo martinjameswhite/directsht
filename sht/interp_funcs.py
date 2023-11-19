@@ -10,13 +10,13 @@ except ImportError:
     print("JAX not found. Falling back to NumPy.")
     import numpy as jnp
 
-default_dtype = 'float64'
+default_dtype = 'float32'
 
+# TODO: JIT-compile this making which_part a static argument
 def precompute_vs(Nsamples_theta,bin_indices,\
                   phi_data_sorted,w_i_sorted,t,ms,which_part):
     '''
-    Calculate the v_{i,j}(m) in the direct_SHT algorithm and move them
-    to the device where JAX will operate (e.g. GPU)
+    Calculate the v_{i,j}(m) in the direct_SHT algorithm
     :param Nsamples_theta : number of theta samples
     :param bin_indices: a 1d numpy array with indices of what bin each \
            data point belongs to
@@ -40,17 +40,28 @@ def precompute_vs(Nsamples_theta,bin_indices,\
         phi_dep = utils.get_phi_dep(phi_data_sorted,m,which_part)
         for j, input in enumerate([input_1,input_2,input_3,input_4]):
             vs[i,:,j] = utils.bin_data(input*phi_dep,bin_indices,Nbins)
-    if jax_present:
-        # Move arrays to GPU memory
-        vs = device_put(vs)
     return(vs)
     #
 
-
-def get_alm(Ylm, dYlm, vs, m):
+def get_alm_jax(Ylm, dYlm, vs):
     """
     The key function: get alm by summing over all interpolated weighted
-    Y_lm's. Interpolation uses cubic Hermite splines
+    Y_lm's using JAX. Interpolation uses cubic Hermite splines
+    :param Ylm: 1d numpy array of Ylm samples. Ideally, in device memory already
+    :param dYlm: 1d numpy array of first derivatives of Ylm at sample points.\
+                 Ideally, in device memory already
+    :param vs: np array of size (Nsamples_theta,4) with the v_{i,j}(m) \
+               (at a fixed m) used in the direct_SHT algorithm
+    :param m: m value of the alm we want to calculate
+    :return: a 1D numpy array with the alm value
+    """
+    return(jnp.sum(Ylm[:-1] * vs[:-1,0] + dYlm[:-1] * vs[:-1,1] +\
+                   Ylm[ 1:] * vs[1:,2] + dYlm[ 1:] * vs[1:,3]))
+
+def get_alm_np(Ylm, dYlm, vs, m):
+    """
+    The key function: get alm by summing over all interpolated weighted
+    Y_lm's using Numpy. Interpolation uses cubic Hermite splines
     :param Ylm: 1d numpy array of Ylm samples. Ideally, in device memory already
     :param dYlm: 1d numpy array of first derivatives of Ylm at sample points.\
                  Ideally, in device memory already
@@ -59,5 +70,5 @@ def get_alm(Ylm, dYlm, vs, m):
     :param m: m value of the alm we want to calculate
     :return: a 1D numpy array with the alm value
     """
-    return(jnp.sum(Ylm[:-1] * vs[m,:-1,0] + dYlm[:-1] * vs[m,:-1,1] +\
+    return(np.sum(Ylm[:-1] * vs[m,:-1,0] + dYlm[:-1] * vs[m,:-1,1] +\
                    Ylm[ 1:] * vs[m, 1:,2] + dYlm[ 1:] * vs[m, 1:,3]))

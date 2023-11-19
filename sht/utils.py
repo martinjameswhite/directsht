@@ -10,7 +10,7 @@ except ImportError:
     print("JAX not found. Falling back to NumPy.")
     import numpy as jnp
 
-default_dtype = 'float64'
+default_dtype = 'float32'
 @nb.njit(parallel=True)
 def bin_data(data, bin_indices, Nbins):
     '''

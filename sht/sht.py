@@ -95,7 +95,8 @@ class DirectSHT:
         assert np.all( (theta>=0) & (theta<np.pi) ),\
                "theta must be in [0,pi)."
 
-        # Multiply the weights by a regularization factor to avoid numerical under/overflow
+        # Multiply the weights by a regularization factor to avoid numerical
+        # under/overflow
         wt*= reg_factor
         # Get the indexing of ell and m in the Healpix convention for
         # later use
@@ -156,15 +157,21 @@ class DirectSHT:
                 print("Precomputing vs took ",t2-t1," seconds.",flush=True)
             #
             if jax_present:
+                # Rearrange by m value of every a_lm index.
+                # TODO: This is very memory-inefficient, but it makes it very easy to batch over with JAX's vmap...
+                vs_real, vs_imag = [vs[m_ordering, :, :] for vs in [vs_real, vs_imag]]
+                # Move arrays to GPU memory
+                vs_real, vs_imag = [device_put(vs) for vs in [vs_real, vs_imag]]
                 # Get a grid of all alm's -- best run on a GPU!
-                get_all_alms_w_jax = vmap(jit(interp.get_alm),in_axes=(0,0,None, 0))
+                get_all_alms_w_jax = vmap(jit(interp.get_alm_jax),in_axes=(0,0,0))
                 # Notice we put the Ylm and dYlm tables in device memory for a speed boost
-                alm_grid_real = get_all_alms_w_jax(Yv_jax, dYv_jax, vs_real, m_ordering)
-                alm_grid_imag = get_all_alms_w_jax(Yv_jax, dYv_jax, vs_imag, m_ordering)
-                alm_grid = np.array(alm_grid_real, dtype='complex128') - 1j *np.array(alm_grid_imag, dtype='complex128')
+                alm_grid_real = get_all_alms_w_jax(Yv_jax, dYv_jax, vs_real)
+                alm_grid_imag = get_all_alms_w_jax(Yv_jax, dYv_jax, vs_imag)
+                alm_grid = (np.array(alm_grid_real, dtype='complex128')
+                            - 1j *np.array(alm_grid_imag, dtype='complex128'))
             else:
                 # JIT compile the get_alm function and vectorize it
-                get_alm_jitted = nb.jit(nopython=True)(interp.get_alm)
+                get_alm_jitted = nb.jit(nopython=True)(interp.get_alm_np)
                 #
                 alm_grid = np.zeros(len(self.Yv[:,0]), dtype='complex128')
                 vs_tot = vs_real - 1j * vs_imag
