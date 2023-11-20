@@ -105,7 +105,7 @@ class DirectSHT:
         wt*= reg_factor
         # Get the indexing of ell and m in the Healpix convention for
         # later use
-        ell_ordering,m_ordering = utils.getlm(self.Nell,len(self.Yv[:, 0]))
+        ell_ordering,m_ordering = utils.getlm(self.Nell-1,len(self.Yv[:, 0]))
         # Eventually, we will need to multiply the alm's by (-1)^{ell-m}
         # for x=cos\theta<0
         parity_factor = (-1)**(ell_ordering - m_ordering)
