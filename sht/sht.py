@@ -97,8 +97,8 @@ class DirectSHT:
         """
         assert len(theta)==len(phi) and \
                len(phi)==len(wt),"theta,phi,wt must be the same length."
-        assert np.all( (theta>=0) & (theta<np.arccos(self.xmax)) ),\
-               "theta must be in [0,ACos[xmax])."
+        assert np.all( (theta>=0) & (theta>np.arccos(self.xmax)) & (theta<np.arccos(-self.xmax))),\
+               "theta must be in [ACos[xmax],ACos[-xmax])."
 
         # Multiply the weights by a regularization factor to avoid numerical
         # under/overflow
