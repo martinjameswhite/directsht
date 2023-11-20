@@ -68,7 +68,7 @@ class DirectSHT:
         :param xmax:  Maximum value of |cos(theta)| to compute.
         """
         self.Nell, self.Nx, self.xmax = Nell, Nx, xmax
-        xx = np.arange(Nx,dtype='float64')/float(Nx) * xmax
+        xx = np.arange(Nx,dtype='float64')/float(Nx-1) * xmax
         Yv = self.compute_Plm_table(Nell,xx)
         Yd = self.compute_der_table(Nell,xx,Yv)
         # And finally put in the (2ell+1)/4pi normalization:
