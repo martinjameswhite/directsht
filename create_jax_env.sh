@@ -15,9 +15,9 @@ module list
 conda create --name jax-env --clone nersc-mpi4py
 conda activate jax-env
 conda update --all -y
-conda install numpy scipy -y
+conda install numpy scipy ipykernel -y
 conda install -c conda-forge numba healpy -y
-conda install -c confa-forge ipykernel ipython jupyter -y
+conda install -c confa-forge ipython jupyter -y
 python3 -m ipykernel install --user --name jax-env --display-name JAX-env
 #
 #
