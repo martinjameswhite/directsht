@@ -15,14 +15,14 @@ module list
 conda create --name jax-env --clone nersc-mpi4py
 conda activate jax-env
 conda update --all -y
-conda install numpy scipy
+conda install numpy scipy -y
 conda install -c conda-forge numba healpy -y
 conda install -c confa-forge ipykernel ipython jupyter -y
 python3 -m ipykernel install --user --name jax-env --display-name JAX-env
 #
 #
 # Activate the environment before using pip to install JAX(lib).
-conda activate jax-env
+#conda activate jax-env
 # Install the JAX library.
 python3 -m pip install "jaxlib==0.4.7"
 # Install a compatible wheel
