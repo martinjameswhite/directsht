@@ -25,7 +25,7 @@ def ext_slow_recurrence(Nl,xx,Ylm):
     order to use JIT this can not be part of the class, and we need
     to pass Nl,x,Ylm as arguments."""
     # This should match the convention used in the SHT class below.
-    indx = lambda ell,m:  int(m * (2 * (Nl-1) + 1 - m) / 2 + ell)
+    indx = lambda ell,m:  (m*(2*Nl-1-m))//2 + ell
     for m in range(0,Nl-1):
         for ell in range(m+2,Nl):
             i0,i1,i2    = indx(ell  ,m),\
@@ -46,7 +46,7 @@ def ext_der_slow_recurrence(Nl,xx,Yv,Yd):
     """Pull out the slow, multi-loop piece of the recurrence for the
     derivatives."""
     # This should match the convention used in the SHT class below.
-    indx = lambda ell,m:  int(m * (2 * (Nl-1) + 1 - m) / 2 + ell)
+    indx = lambda ell,m:  (m*(2*Nl-1-m))//2 + ell
     omx2 = 1.0-xx**2
     for ell in range(Nl):
         for m in range(1,ell+1):
@@ -201,8 +201,7 @@ class DirectSHT:
         :param  m:   m value to return.
         :return ii:  Index value in the value and derivatives grids.
         """
-        lmax = self.Nell-1
-        ii = int(m * (2*lmax+1-m)/2 + ell)
+        ii= (m*(2*self.Nl-1-m))//2 + ell
         return(ii)
     def slow_recurrence(self,Nl,xx,Ylm):
         """Pull out the slow, multi-loop piece of the recurrence.
