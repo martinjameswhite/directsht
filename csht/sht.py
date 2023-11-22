@@ -59,9 +59,9 @@ class DirectSHT:
                "theta must be in [ACos[xmax],ACos[-xmax])."
         Npnt = len(theta)
         # Convert theta, phi and wt to c_double_Arrays.
-        tt = (ct.c_double*Npnt)(*(tt))
-        pp = (ct.c_double*Npnt)(*(pp))
-        ww = (ct.c_double*Npnt)(*(ww))
+        tt = (ct.c_double*Npnt)()
+        pp = (ct.c_double*Npnt)()
+        ww = (ct.c_double*Npnt)()
         tt[:],pp[:],ww[:] = theta,phi,wt
         # Make space for the cosine and sine components,
         # converting to c_double_Array object.
