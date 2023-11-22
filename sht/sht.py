@@ -201,7 +201,7 @@ class DirectSHT:
         :param  m:   m value to return.
         :return ii:  Index value in the value and derivatives grids.
         """
-        ii= (m*(2*self.Nl-1-m))//2 + ell
+        ii= (m*(2*self.Nell-1-m))//2 + ell
         return(ii)
     def slow_recurrence(self,Nl,xx,Ylm):
         """Pull out the slow, multi-loop piece of the recurrence.
