@@ -131,7 +131,7 @@ double	tt,t1,t2,s0,s1,s2,s3;
         xx = cos(theta[ii]);
         ax = fabs(ax);
         ix = ax/dx;
-        tt = xx/dx-ix;
+        tt = ax/dx-ix;
         t1 = (tt-1.0)*(tt-1.0);
         t2 = tt*tt;
         s0 = (1+2*tt)*t1;
