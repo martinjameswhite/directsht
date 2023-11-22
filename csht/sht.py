@@ -85,7 +85,5 @@ class DirectSHT:
         :param  m:   m value to return.
         :return ii:  Index value in the value and derivatives grids.
         """
-        lmax = self.Nell-1
-        ii = int(m * (2*lmax+1-m)/2 + ell)
+        ii= (m*(2*self.Nell-1-m))//2 + ell
         return(ii)
-        #
