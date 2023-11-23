@@ -31,14 +31,15 @@ class DirectSHT:
         self.Nlm   = (Nell*(Nell+1))//2 # Total (l,m) size.
         self.Nsize = self.Nlm*Nx        # Size of tables.
         xx = np.arange(Nx,dtype='float64')/float(Nx-1) * xmax
-        # Convert to c_double_Array object.
-        Yv = (ct.c_double*self.Nsize)()
-        Yd = (ct.c_double*self.Nsize)()
-        self.mylib = ct.CDLL(fullpath+"sht_helper.so")
-        self.x,self.Yv,self.Yd = xx,Yv,Yd
+        self.x = xx
+        # Set up c_double_Array objects for storing Ylm and its
+        # first derivative.
+        self.Yv    = (ct.c_double*self.Nsize)()
+        self.Yd    = (ct.c_double*self.Nsize)()
+        self.mylib =  ct.CDLL(fullpath+"sht_helper.so")
         #
         self.mylib.make_table(ct.c_int(Nell),ct.c_int(Nx),ct.c_double(xmax),\
-                              ct.byref(Yv),ct.byref(Yd))
+                              ct.byref(self.Yv),ct.byref(self.Yd))
         #
     def __call__(self,theta,phi,wt,verbose=True):
         """
