@@ -130,7 +130,7 @@ double	tt,t1,t2,s0,s1,s2,s3;
     for (m=0; m<=ell; m++) {
       offset  = Nx*indx(ell,m,Nl);
       ss = sc = 0.0; /* Assumulate the sine and cosine sums here.*/
-#pragma omp parallel for private(ii,ix,i0,i1,xx,ax,tt,t1,t2,s0,s1,s2,s3,yv), shared(Nl,Np,ell,m,dx,offset,Yv,Yd,theta,phi,wt), reduction(+:sc,ss), schedule(static)
+#pragma omp parallel for private(ii,ix,i0,i1,xx,ax,tt,t1,t2,s0,s1,s2,s3,yv), shared(Nl,Np,ell,m,dx,offset,Yv,Yd,cost,phi,wt), reduction(+:sc,ss), schedule(static)
       for (ii=0; ii<Np; ii++) {
         /* Use Hermite spline to get Ylm(x,0). */
         xx = cost[ii];
