@@ -65,8 +65,8 @@ if __name__=="__main__":
     #
     # Now test the interpolation code.
     print("\nTest sum of Ylms.")
-    tt = np.linspace(0.6,1.4,1000)
-    pp = np.linspace(0.0,3.1,1000)
+    tt = np.arccos(np.linspace(0.2,0.8,1000))
+    pp = np.linspace(0.0,2*np.pi,1000)
     wt = np.ones_like(tt)
     now= time.time()
     res= sht(tt,pp,wt)
