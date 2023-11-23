@@ -19,10 +19,6 @@ from   sht import DirectSHT
 
 
 if __name__=="__main__":
-    for Nl in [128,256]:
-        now = time.time()
-        sht = DirectSHT(Nl,2*Nl)
-        print("Nl=",Nl," computation took ",time.time()-now," seconds.",flush=True)
     # Compare Ylm.
     Nl,Nx = 500,1024
     now   = time.time()
@@ -48,8 +44,8 @@ if __name__=="__main__":
         for m in [0,5,15,25,40]:
             if m<=ell:
                 lbs,mys,j = "","",sht.indx(ell,m)
-                for i in ii: lbs+= " {:12.4e}".format(Ylm[j,i])
-                for i in ii: mys+= " {:12.4e}".format(Ylb[j,i])
+                for i in ii: lbs+= " {:12.4e}".format(Ylb[j,i])
+                for i in ii: mys+= " {:12.4e}".format(Ylm[j,i])
                 print("({:2d},{:2d}):".format(ell,m))
                 print("\t"+lbs)
                 print("\t"+mys)
@@ -75,7 +71,7 @@ if __name__=="__main__":
     now= time.time()
     res= sht(tt,pp,wt)
     print("sht computation took ",time.time()-now," seconds for ",tt.size," points.\n",flush=True)
-    for ell in range(4):
+    for ell in range(16):
         for m in range(ell+1):
             ii = sht.indx(ell,m)
             print("({:3d},{:3d}) - ".format(ell,m)+str(res[ii]))
