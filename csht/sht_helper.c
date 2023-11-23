@@ -19,12 +19,12 @@ int	ell,m,ix,ii,i0,i1,i2;
 double	xx,sx,omx2,dx,fact1,fact2;
   dx = xmax/(Nx-1.0);
   /* First do Legendre polynomials. */
-#pragma omp parallel for private(ix), shared(dx,Yv)
+#pragma omp parallel for private(ix), shared(Nx,dx,Yv)
   for (ix=0; ix<Nx; ix++) {
     Yv[Nx*0+ix] = 1.0;
     Yv[Nx*1+ix] = ix*dx;
   }
-#pragma omp parallel for private(ell,i0,i1,i2,ix,xx), shared(Nl,dx,Yv)
+#pragma omp parallel for private(ell,i0,i1,i2,ix,xx), shared(Nl,Nx,dx,Yv)
   for (ell=2; ell<Nl; ell++) {
     i0 = Nx*indx(ell-0,0,Nl);
     i1 = Nx*indx(ell-1,0,Nl);
@@ -35,7 +35,7 @@ double	xx,sx,omx2,dx,fact1,fact2;
     }
   }
   /* Now fill in m=ell function values. */
-#pragma omp parallel for private(m,i0,i1,ix,xx), shared(Nl,dx,Yv)
+#pragma omp parallel for private(m,i0,i1,ix,xx), shared(Nl,Nx,dx,Yv)
   for (m=1; m<Nl; m++) {
     i0 = Nx*indx(m-0,m-0,Nl);
     i1 = Nx*indx(m-1,m-1,Nl);
@@ -45,7 +45,7 @@ double	xx,sx,omx2,dx,fact1,fact2;
     }
   }
   /* and the m=ell-1 function values. */
-#pragma omp parallel for private(m,i0,i1,ix,xx), shared(Nl,dx,Yv)
+#pragma omp parallel for private(m,i0,i1,ix,xx), shared(Nl,Nx,dx,Yv)
   for (m=1; m<Nl-1; m++) {
     i0 = Nx*indx(m+0,m,Nl);
     i1 = Nx*indx(m+1,m,Nl);
@@ -55,7 +55,7 @@ double	xx,sx,omx2,dx,fact1,fact2;
     }
   }
   /* Finally fill in the other m values. */
-#pragma omp parallel for private(m,ell,i0,i1,i2,fact1,fact2,ix,xx), shared(Nl,dx,Yv)
+#pragma omp parallel for private(m,ell,i0,i1,i2,fact1,fact2,ix,xx), shared(Nl,Nx,dx,Yv)
   for (m=0; m<Nl-1; m++)
     for (ell=m+2; ell<Nl; ell++) {
       i0    = Nx*indx(ell-0,m,Nl);
@@ -74,7 +74,7 @@ double	xx,sx,omx2,dx,fact1,fact2;
     Yd[Nx*0+ix] = 0.0;
     Yd[Nx*1+ix] = 1.0;
   }
-#pragma omp parallel for private(ell,i0,i1,ix,xx,omx2), shared(Nl,dx,Yv,Yd)
+#pragma omp parallel for private(ell,i0,i1,ix,xx,omx2), shared(Nl,Nx,dx,Yv,Yd)
   for (ell=2; ell<Nl; ell++) {
     i0 = Nx*indx(ell-0,0,Nl);
     i1 = Nx*indx(ell-1,0,Nl);
@@ -85,7 +85,7 @@ double	xx,sx,omx2,dx,fact1,fact2;
     }
   }
   /* Then the higher m's. */
-#pragma omp parallel for private(ell,m,i0,i1,fact1,ix,xx,omx2), shared(Nl,dx,Yv,Yd)
+#pragma omp parallel for private(ell,m,i0,i1,fact1,ix,xx,omx2), shared(Nl,Nx,dx,Yv,Yd)
   for (ell=0; ell<Nl; ell++)
     for (m=1; m<=ell; m++) {
       i0    = Nx*indx(ell-0,m,Nl);
@@ -98,7 +98,7 @@ double	xx,sx,omx2,dx,fact1,fact2;
       }
     }
   /* Normalize by Sqrt[ (2ell+1)/4Pi ] */
-#pragma omp parallel for private(ell,m,fact1,ii,ix), shared(Nl,Yv,Yd), schedule(static)
+#pragma omp parallel for private(ell,m,fact1,ii,ix), shared(Nl,Nx,Yv,Yd), schedule(static)
   for (ell=0; ell<Nl; ell++) {
     fact1 = sqrt( (2*ell+1.0)/4./M_PI );
     for (m=0; m<=ell; m++) {
