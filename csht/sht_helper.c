@@ -24,38 +24,37 @@ double	xx,sx,omx2,dx,fact1,fact2;
     Yv[Nx*0+ix] = 1.0;
     Yv[Nx*1+ix] = ix*dx;
   }
-#pragma omp parallel for private(ell,i0,i1,i2,ix,xx), shared(Nl,Nx,dx,Yv)
   for (ell=2; ell<Nl; ell++) {
     i0 = Nx*indx(ell-0,0,Nl);
     i1 = Nx*indx(ell-1,0,Nl);
     i2 = Nx*indx(ell-2,0,Nl);
+  #pragma omp parallel for private(ix,xx), shared(Nl,Nx,dx,ell,i0,i1,i2,Yv)
     for (ix=0; ix<Nx; ix++) {
       xx        = ix * dx;
       Yv[i0+ix] = (2-1./ell)*xx*Yv[i1+ix] - (1.0-1./ell)*Yv[i2+ix];
     }
   }
   /* Now fill in m=ell function values. */
-#pragma omp parallel for private(m,i0,i1,ix,xx), shared(Nl,Nx,dx,Yv)
   for (m=1; m<Nl; m++) {
     i0 = Nx*indx(m-0,m-0,Nl);
     i1 = Nx*indx(m-1,m-1,Nl);
+  #pragma omp parallel for private(ix,xx), shared(Nl,Nx,dx,m,i0,i1,Yv)
     for (ix=0; ix<Nx; ix++) {
       xx        = ix * dx;
       Yv[i0+ix] = -sqrt( (1.0-0.5/m)*(1.0-xx*xx) )*Yv[i1+ix];
     }
   }
   /* and the m=ell-1 function values. */
-#pragma omp parallel for private(m,i0,i1,ix,xx), shared(Nl,Nx,dx,Yv)
   for (m=1; m<Nl-1; m++) {
     i0 = Nx*indx(m+0,m,Nl);
     i1 = Nx*indx(m+1,m,Nl);
+  #pragma omp parallel for private(ix,xx), shared(Nl,Nx,dx,m,i0,i1,Yv)
     for (ix=0; ix<Nx; ix++) {
       xx        = ix * dx;
       Yv[i1+ix] = sqrt(2*m+1.)*xx*Yv[i0+ix];
     }
   }
   /* Finally fill in the other m values. */
-#pragma omp parallel for private(m,ell,i0,i1,i2,fact1,fact2,ix,xx), shared(Nl,Nx,dx,Yv)
   for (m=0; m<Nl-1; m++)
     for (ell=m+2; ell<Nl; ell++) {
       i0    = Nx*indx(ell-0,m,Nl);
@@ -63,6 +62,7 @@ double	xx,sx,omx2,dx,fact1,fact2;
       i2    = Nx*indx(ell-2,m,Nl);
       fact1 = sqrt( (double)(ell-m)/(double)(ell+m) );
       fact2 = sqrt( (ell-m-1.)/(ell+m-1.) );
+    #pragma omp parallel for private(ix,xx), shared(Nl,Nx,dx,ell,m,i0,i1,i2,fact1,fact2,Yv), schedule(static)
       for (ix=0; ix<Nx; ix++) {
         xx        = ix * dx;
         Yv[i0+ix] = (2*ell-1)*xx*Yv[i1+ix] - (ell+m-1)*Yv[i2+ix]*fact2;
