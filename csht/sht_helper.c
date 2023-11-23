@@ -129,7 +129,7 @@ double	tt,t1,t2,s0,s1,s2,s3;
       for (ii=0; ii<Np; ii++) {
         /* Use Hermite spline to get Ylm(x,0). */
         xx = cos(theta[ii]);
-        ax = fabs(ax);
+        ax = fabs(xx);
         ix = ax/dx;
         tt = ax/dx-ix;
         t1 = (tt-1.0)*(tt-1.0);
