@@ -63,7 +63,7 @@ class DirectSHT:
         tt = (ct.c_double*Npnt)()
         pp = (ct.c_double*Npnt)()
         ww = (ct.c_double*Npnt)()
-        tt[:],pp[:],ww[:] = mp.cos(theta),phi,wt
+        tt[:],pp[:],ww[:] = np.cos(theta),phi,wt
         # Make space for the cosine and sine components, as c_double_Array objects.
         carr = (ct.c_double*self.Nlm)()
         sarr = (ct.c_double*self.Nlm)()
