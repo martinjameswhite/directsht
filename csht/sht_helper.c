@@ -24,7 +24,7 @@ double	xx,sx,omx2,dx,fact1,fact2;
     Yv[Nx*0+ix] = 1.0;
     Yv[Nx*1+ix] = ix*dx;
   }
-#pragma omp parallel for private(ell,i0,i1,i2,ix,xx), shared(dx,Yv)
+#pragma omp parallel for private(ell,i0,i1,i2,ix,xx), shared(Nl,dx,Yv)
   for (ell=2; ell<Nl; ell++) {
     i0 = Nx*indx(ell-0,0,Nl);
     i1 = Nx*indx(ell-1,0,Nl);
@@ -35,7 +35,7 @@ double	xx,sx,omx2,dx,fact1,fact2;
     }
   }
   /* Now fill in m=ell function values. */
-#pragma omp parallel for private(m,i0,i1,ix,xx), shared(dx,Yv)
+#pragma omp parallel for private(m,i0,i1,ix,xx), shared(Nl,dx,Yv)
   for (m=1; m<Nl; m++) {
     i0 = Nx*indx(m-0,m-0,Nl);
     i1 = Nx*indx(m-1,m-1,Nl);
@@ -45,7 +45,7 @@ double	xx,sx,omx2,dx,fact1,fact2;
     }
   }
   /* and the m=ell-1 function values. */
-#pragma omp parallel for private(m,i0,i1,ix,xx), shared(dx,Yv)
+#pragma omp parallel for private(m,i0,i1,ix,xx), shared(Nl,dx,Yv)
   for (m=1; m<Nl-1; m++) {
     i0 = Nx*indx(m+0,m,Nl);
     i1 = Nx*indx(m+1,m,Nl);
@@ -55,7 +55,7 @@ double	xx,sx,omx2,dx,fact1,fact2;
     }
   }
   /* Finally fill in the other m values. */
-#pragma omp parallel for private(m,ell,i0,i1,i2,fact1,fact2,ix,xx), shared(dx,Yv)
+#pragma omp parallel for private(m,ell,i0,i1,i2,fact1,fact2,ix,xx), shared(Nl,dx,Yv)
   for (m=0; m<Nl-1; m++)
     for (ell=m+2; ell<Nl; ell++) {
       i0    = Nx*indx(ell-0,m,Nl);
@@ -74,7 +74,7 @@ double	xx,sx,omx2,dx,fact1,fact2;
     Yd[Nx*0+ix] = 0.0;
     Yd[Nx*1+ix] = 1.0;
   }
-#pragma omp parallel for private(ell,i0,i1,ix,xx,omx2), shared(dx,Yv,Yd)
+#pragma omp parallel for private(ell,i0,i1,ix,xx,omx2), shared(Nl,dx,Yv,Yd)
   for (ell=2; ell<Nl; ell++) {
     i0 = Nx*indx(ell-0,0,Nl);
     i1 = Nx*indx(ell-1,0,Nl);
@@ -85,7 +85,7 @@ double	xx,sx,omx2,dx,fact1,fact2;
     }
   }
   /* Then the higher m's. */
-#pragma omp parallel for private(ell,m,i0,i1,fact1,ix,xx,omx2), shared(dx,Yv,Yd)
+#pragma omp parallel for private(ell,m,i0,i1,fact1,ix,xx,omx2), shared(Nl,dx,Yv,Yd)
   for (ell=0; ell<Nl; ell++)
     for (m=1; m<=ell; m++) {
       i0    = Nx*indx(ell-0,m,Nl);
@@ -98,7 +98,7 @@ double	xx,sx,omx2,dx,fact1,fact2;
       }
     }
   /* Normalize by Sqrt[ (2ell+1)/4Pi ] */
-#pragma omp parallel for private(ell,m,fact1,ii,ix), shared(Yv,Yd), schedule(static)
+#pragma omp parallel for private(ell,m,fact1,ii,ix), shared(Nl,Yv,Yd), schedule(static)
   for (ell=0; ell<Nl; ell++) {
     fact1 = sqrt( (2*ell+1.0)/4./M_PI );
     for (m=0; m<=ell; m++) {
@@ -120,7 +120,7 @@ int	do_transform(int Nl, int Nx, double xmax, double Yv[], double Yd[],
 int	ell,m,ii,ix,offset,i0,i1;
 double	xx,ax,dx,hh,sc,ss,yv;
 double	tt,t1,t2,s0,s1,s2,s3;
-  /* Zero the carr and sarr. */
+  /* Zero the carr and sarr -- not really necessary. */
 #pragma omp parallel for private(ii) shared(Nl,carr,sarr)
   for (ii=0; ii<(Nl*(Nl+1))/2; ii++) {
     carr[ii]=sarr[ii]=0.0;
@@ -130,7 +130,7 @@ double	tt,t1,t2,s0,s1,s2,s3;
     for (m=0; m<=ell; m++) {
       offset  = Nx*indx(ell,m,Nl);
       ss = sc = 0.0; /* Assumulate the sine and cosine sums here.*/
-#pragma omp parallel for private(ii,ix,i0,i1,xx,ax,tt,t1,t2,s0,s1,s2,s3,yv), shared(ell,m,dx,offset,Yv,Yd,theta,phi,wt), reduction(+:sc,ss), schedule(static)
+#pragma omp parallel for private(ii,ix,i0,i1,xx,ax,tt,t1,t2,s0,s1,s2,s3,yv), shared(Nl,Np,ell,m,dx,offset,Yv,Yd,theta,phi,wt), reduction(+:sc,ss), schedule(static)
       for (ii=0; ii<Np; ii++) {
         /* Use Hermite spline to get Ylm(x,0). */
         xx = cos(theta[ii]);
