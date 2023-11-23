@@ -63,12 +63,9 @@ class DirectSHT:
         pp = (ct.c_double*Npnt)()
         ww = (ct.c_double*Npnt)()
         tt[:],pp[:],ww[:] = theta,phi,wt
-        # Make space for the cosine and sine components, converting to c_double_Array object
-        # and initializing the values to zero.
-        carr    = (ct.c_double*self.Nlm)()
-        sarr    = (ct.c_double*self.Nlm)()
-        carr[:] = [0.0]*self.Nlm
-        sarr[:] = [0.0]*self.Nlm
+        # Make space for the cosine and sine components, as c_double_Array objects.
+        carr = (ct.c_double*self.Nlm)()
+        sarr = (ct.c_double*self.Nlm)()
         self.mylib.do_transform(ct.c_int(self.Nell),ct.c_int(self.Nx),ct.c_double(self.xmax),\
                                 ct.byref(self.Yv),ct.byref(self.Yd),\
                                 ct.c_int(Npnt),ct.byref(tt),ct.byref(pp),ct.byref(ww),\
