@@ -115,7 +115,7 @@ double	xx,sx,omx2,dx,fact1,fact2;
 
 
 int	do_transform(int Nl, int Nx, double xmax, double Yv[], double Yd[],
-                     int Np, double theta[], double phi[], double wt[],
+                     int Np, double cost[], double phi[], double wt[],
                      double carr[], double sarr[]) {
 int	ell,m,ii,ix,offset,i0,i1;
 double	xx,ax,dx,hh,sc,ss,yv;
@@ -133,7 +133,7 @@ double	tt,t1,t2,s0,s1,s2,s3;
 #pragma omp parallel for private(ii,ix,i0,i1,xx,ax,tt,t1,t2,s0,s1,s2,s3,yv), shared(Nl,Np,ell,m,dx,offset,Yv,Yd,theta,phi,wt), reduction(+:sc,ss), schedule(static)
       for (ii=0; ii<Np; ii++) {
         /* Use Hermite spline to get Ylm(x,0). */
-        xx = cos(theta[ii]);
+        xx = cost[ii];
         ax = fabs(xx);
         ix = ax/dx;
         tt = ax/dx-ix;
