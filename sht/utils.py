@@ -11,52 +11,34 @@ except ImportError:
     import numpy as jnp
 
 default_dtype = 'float32'
-@nb.njit(parallel=True)
-def bin_data(data, bin_indices, Nbins):
+def find_transitions(arr):
     '''
-    Bin data into Nbins bins
-    :param data: 1D np array of data to bin
-    :param bin_indices: 1D np array with the bin index for each data point
-    :param Nbins: number of bins
+    Find the indices of transitions between different values in an array
+    :param arr: 1D numpy array indicating what bin each element belongs to (must be sorted)
+    :return: 1D numpy array of indices where the value in arr changes (includes 0)
     '''
-    bin_sums = np.zeros(Nbins, dtype=default_dtype)
-    for i in nb.prange(len(data)):
-        bin_sums[bin_indices[i]] += data[i]
-    return bin_sums
+    # Find the differences between consecutive elements
+    differences = np.diff(arr)
+    # Find the indices where differences are non-zero
+    transition_indices = np.nonzero(differences)[0] + 1
+    # Prepend a zero for convenience
+    transition_indices = np.insert(transition_indices, 0, 0, axis=0)
+    return transition_indices
 
-def get_phi_dep(phi_data_sorted, m, which_part):
+def reshape_array(data, transitions, bin_num, bin_len):
     '''
-    Calculate the real or imaginary part of the phi dependence of the Ylm's
-    :param phi_data_sorted: a 1d numpy array of phi data points (same length as theta_data_sorted)
-    :param m: the m index of the Ylm
-    :param which_part: 'cos' or 'sin' for the real or imaginary part of the phi dependence
-    :return: a 1D numpy array of the real or imaginary part of the phi dependence of the Ylm's at each phi data point
+    Reshape a 1D array into a 2D array to facilitate binning
+    :param data: 1D numpy array of data to be binned
+    :param transitions: 1D numpy array of indices where the value in data changes (includes 0)
+    :param bin_num: int. Number of bins where there is data
+    :param bin_len: int. Maximum number of points in a bin
+    :return: 2D numpy array of reshaped data, zero padded in bins with fewer points
     '''
-    fn = function_map.get(which_part)
-    # JIT compile the function and vectorize it
-    if jax_present:
-        vect_fn = vmap(jit(fn), in_axes=(0, None))
-        out = np.array(vect_fn(phi_data_sorted, m), dtype=default_dtype)
-    else:
-        out = fn(phi_data_sorted, m)
-    return out
-
-@nb.njit(parallel=True)
-def cosmphi_np(phi, m):
-    return np.cos(m * phi)
-@nb.njit(parallel=True)
-def sinmphi_np(phi, m):
-    return np.sin(m * phi)
-def cosmphi_jax(phi, m):
-    return jnp.cos(m * phi)
-def sinmphi_jax(phi, m):
-    return jnp.sin(m * phi)
-
-# Map functions based on which_part
-function_map = {
-    'cos': cosmphi_jax if jax_present else cosmphi_np,
-    'sin': sinmphi_jax if jax_present else sinmphi_np,
-}
+    data_reshaped = np.zeros((bin_num, bin_len))
+    for i in range(bin_num-1):
+        fill_in = data[transitions[i]:transitions[i+1]]
+        data_reshaped[i,:len(fill_in)] = fill_in
+    return data_reshaped
 def getlm(lmax, szalm, i=None):
     """Get the l and m from index and lmax. From Healpy
 

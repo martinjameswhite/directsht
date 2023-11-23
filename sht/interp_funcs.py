@@ -1,5 +1,4 @@
 import numpy as np
-import utils
 
 try:
     jax_present = True
@@ -12,36 +11,26 @@ except ImportError:
 
 default_dtype = 'float32'
 
-# TODO: JIT-compile this making which_part a static argument
-def precompute_vs(Nsamples_theta,bin_indices,\
-                  phi_data_sorted,w_i_sorted,t,ms,which_part):
+@jit
+def collapse(arr):
     '''
-    Calculate the v_{i,j}(m) in the direct_SHT algorithm
-    :param Nsamples_theta : number of theta samples
-    :param bin_indices: a 1d numpy array with indices of what bin each \
-           data point belongs to
-    :param phi_data_sorted: a 1d numpy array of phi data points \
-           (same length as theta_data_sorted)
-    :param w_i_sorted: a 1d numpy array of weights for each theta data point
-    :param t: a 1d numpy array of t = x_data-x_sample[i]
-    :param ms: a 1d numpy array of m indices of the Ylm's
-    :param which_part: 'cos' or 'sin' for the real or imaginary part.
-    :return: 3D numpy arrays of the v_{i,j}(m) in the direct_SHT algorithm
+    Sum over the second axis of a 2D array -- i.e., the key binning operation!
+    :param arr: 2D numpy array, where the 1st axis contains the different bins
+                and the 2nd axis contains the data in each bin
+    :return: 1D numpy array of the sums of the data in each bin
     '''
-    Nbins = Nsamples_theta
-    #
-    input_1 = w_i_sorted * (2*t + 1) * (1-t)**2
-    input_2 = w_i_sorted * t * (1-t)**2
-    input_3 = w_i_sorted * t**2 * (3-2*t)
-    input_4 = w_i_sorted * t**2 * (t-1)
-    #
-    vs = np.zeros((len(ms), Nsamples_theta, 4), dtype=default_dtype)
-    for i, m in enumerate(ms):
-        phi_dep = utils.get_phi_dep(phi_data_sorted,m,which_part)
-        for j, input in enumerate([input_1,input_2,input_3,input_4]):
-            vs[i,:,j] = utils.bin_data(input*phi_dep,bin_indices,Nbins)
-    return(vs)
-    #
+    return jnp.sum(arr, axis=1)
+
+#@jit
+def get_vs(ms, phi_data_reshaped, reshaped_inputs):
+    vs_r = np.zeros((len(ms), reshaped_inputs[0].shape[0], 4), dtype=default_dtype)
+    vs_i = np.zeros((len(ms), reshaped_inputs[0].shape[0], 4), dtype=default_dtype)
+    for m in ms:
+        phi_dep_real,phi_dep_imag = [fn(m*phi_data_reshaped) for fn in [jnp.cos, jnp.sin]]
+        for j, input_ in enumerate(reshaped_inputs):
+            vs_r[m,:,j] = np.array(collapse(input_*phi_dep_real))
+            vs_i[m,:,j] = np.array(collapse(input_*phi_dep_imag))
+    return vs_r, vs_i
 
 def get_alm_jax(Ylm, dYlm, vs):
     """

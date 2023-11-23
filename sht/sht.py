@@ -10,6 +10,7 @@ import numba as nb
 import interp_funcs as interp
 import utils
 import time
+from scipy.stats import mode
 
 try:
     jax_present = True
@@ -129,10 +130,6 @@ class DirectSHT:
         else:
             raise ValueError("The theta array seems to be empty!")
         #
-        if jax_present:
-            # We'll want to move big arrays to GPU memory only once
-            Yv_jax  = device_put(self.Yv)
-            dYv_jax = device_put(self.Yd)
         for x, par_fact, idx in which_case:
             t0 = time.time()
             # Sort the data in ascending order of theta
@@ -147,15 +144,33 @@ class DirectSHT:
             spline_idx = np.digitize(x_data_sorted, x_samples) - 1
             t = x_data_sorted - x_samples[spline_idx]
             #
+            # Find the number of different bins that are populated
+            occupied_bins = np.unique(spline_idx)
+            bin_num = len(occupied_bins)
+            # Then, we find the maximum number of points in a bin
+            bin_len = mode(spline_idx).count
+            # Find the indices of transitions between bins
+            transitions = utils.find_transitions(spline_idx)
+            # Reshape the inputs into a 2D array for fast binning
+            reshaped_inputs = [device_put(utils.reshape_array(w_i_sorted * input_, transitions, bin_num, bin_len))
+                               for input_ in
+                               [(2 * t + 1) * (1 - t) ** 2, t * (1 - t) ** 2, t ** 2 * (3 - 2 * t), t ** 2 * (t - 1)]]
+            reshaped_phi_data = device_put(utils.reshape_array(phi_data_sorted, transitions, bin_num, bin_len))
+            # Make a mask to discard spurious zeros
+            mask = reshaped_inputs[0] != 0
+            reshaped_inputs = [input_ * mask for input_ in reshaped_inputs]
+            reshaped_phi_data *= mask
+            if jax_present:
+                # We'll want to move big arrays to GPU memory only once
+                Yv_jax = device_put(self.Yv[:, occupied_bins])
+                dYv_jax = device_put(self.Yd[:, occupied_bins])
+            #
             t15 = time.time()
             if verbose: print("Digitizing took ",t15-t1," seconds.",flush=True)
             #
             # We now sum up all w_p f(t) in each spline region i
             ms = np.arange(self.Nell, dtype=int)
-            vs_real, vs_imag = [interp.precompute_vs(len(x_samples),\
-                                spline_idx, phi_data_sorted,\
-                                w_i_sorted,t,ms, which_part) \
-                                for which_part in ['cos', 'sin']]
+            vs_real, vs_imag = interp.get_vs(ms, reshaped_phi_data, reshaped_inputs)
             #
             t2 = time.time()
             if verbose:
