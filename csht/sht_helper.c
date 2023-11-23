@@ -120,6 +120,11 @@ int	do_transform(int Nl, int Nx, double xmax, double Yv[], double Yd[],
 int	ell,m,ii,ix,offset,i0,i1;
 double	xx,ax,dx,hh,sc,ss,yv;
 double	tt,t1,t2,s0,s1,s2,s3;
+  /* Zero the carr and sarr. */
+#pragma omp parallel for private(ii) shared(Nl,carr,sarr)
+  for (ii=0; ii<(Nl*(Nl+1))/2; ii++) {
+    carr[ii]=sarr[ii]=0.0;
+  }
   dx = xmax/(Nx-1.0);
   for (ell=0; ell<Nl; ell++)
     for (m=0; m<=ell; m++) {
