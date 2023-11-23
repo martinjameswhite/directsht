@@ -74,7 +74,8 @@ class DirectSHT:
                                 ct.c_int(Npnt),ct.byref(tt),ct.byref(pp),ct.byref(ww),\
                                 ct.byref(carr),ct.byref(sarr))
         carr,sarr = np.array(carr[:]),np.array(sarr[:])
-        return( (carr,sarr) )
+        res = carr - 1j*sarr
+        return( res )
     def indx(self,ell,m):
         """
         The index in the grid storing Ylm for ell>=0, 0<=m<=ell.
