@@ -59,11 +59,11 @@ class DirectSHT:
         assert np.all( (theta>=0) & (theta>np.arccos(self.xmax)) & (theta<np.arccos(-self.xmax))),\
                "theta must be in [ACos[xmax],ACos[-xmax])."
         Npnt = len(theta)
-        # Convert theta, phi and wt to c_double_Arrays.
+        # Convert theta, phi and wt to c_double_Arrays and take cos(theta).
         tt = (ct.c_double*Npnt)()
         pp = (ct.c_double*Npnt)()
         ww = (ct.c_double*Npnt)()
-        tt[:],pp[:],ww[:] = theta,phi,wt
+        tt[:],pp[:],ww[:] = mp.cos(theta),phi,wt
         # Make space for the cosine and sine components, as c_double_Array objects.
         carr = (ct.c_double*self.Nlm)()
         sarr = (ct.c_double*self.Nlm)()
