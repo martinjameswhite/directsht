@@ -160,7 +160,7 @@ double	tt,t1,t2,s0,s1,s2,s3;
     }
 
 
-#ifndef  IGNORE
+#ifdef  NOIGNORE
   
 int	fast_transform(int Nl, int Nx, double xmax, double Yv[], double Yd[],
                    int Np, double cost[], double phi[], double wt[],
@@ -206,7 +206,7 @@ double  *cv,*sv;
       s3  = t2*(tt-1.0);
       for (m=0; m<Nl; m++) {
         i1 = nthread*(4*Nl*Nx);
-        cj[i1+m] = s0*cos(m*phi[ii]);
+        cj[i1+m] = wt[ii]*s0*cos(m*phi[ii]);
       }
     }
     for (ithread=1; ithread<nthread; ithread++) {
