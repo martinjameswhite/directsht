@@ -160,6 +160,7 @@ double	tt,t1,t2,s0,s1,s2,s3;
     }
 
 
+#ifndef  IGNORE
   
 int	fast_transform(int Nl, int Nx, double xmax, double Yv[], double Yd[],
                    int Np, double cost[], double phi[], double wt[],
@@ -218,3 +219,5 @@ double  *cv,*sv;
   free(sv);free(cv);
   return(0);
 }
+
+#endif
