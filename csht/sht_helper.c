@@ -14,7 +14,7 @@ int	ii;
 
 
 int	make_table(int Nl, int Nx, double xmax, double Yv[], double Yd[]) {
-/* Makes the function and derivative tables. */
+/* Makes the function value and derivative tables: Yv, Yd. */
 int	ell,m,ix,ii,i0,i1,i2;
 double	xx,sx,omx2,dx,fact1,fact2;
   dx = xmax/(Nx-1.0);
@@ -117,6 +117,9 @@ double	xx,sx,omx2,dx,fact1,fact2;
 int	do_transform(int Nl, int Nx, double xmax, double Yv[], double Yd[],
                      int Np, double cost[], double phi[], double wt[],
                      double carr[], double sarr[]) {
+/* Does the direct SHT, filling in the cosine and sine arrays.  This
+   version keeps memory usage to a minimum at the expense of redoing
+   the interpolation in x for each (ell,m). */
 int	ell,m,ii,ix,offset,i0,i1;
 double	xx,ax,dx,hh,sc,ss,yv;
 double	tt,t1,t2,s0,s1,s2,s3;
