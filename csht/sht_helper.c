@@ -158,5 +158,63 @@ double	tt,t1,t2,s0,s1,s2,s3;
       carr[indx(ell,m,Nl)] = sc;
       sarr[indx(ell,m,Nl)] = ss;
     }
+
+
+  
+int	fast_transform(int Nl, int Nx, double xmax, double Yv[], double Yd[],
+                   int Np, double cost[], double phi[], double wt[],
+                   double carr[], double sarr[]) {
+/* Does the direct SHT, filling in the cosine and sine arrays.  This
+   version is faster than do_transform, but uses more memory.  The
+   objects must be sorted in order of increasing cost. */
+int     ell,m,ii,ix,offset,i0,i1,jmin,jmax;
+int     ithread,nthread;
+double  xx,ax,dx,hh,sc,ss,yv;
+double  tt,t1,t2,s0,s1,s2,s3;
+double  sc0,sc1,sc2,sc3,ss0,ss1,ss2,ss3;
+double  *cv,*sv;
+  /* Make storage for the intermediate "v" arrays. */
+  cv = malloc(4*Nl*Nx*sizeof(double));
+  if (cv==NULL) {perror("malloc");return(1);}
+  sv = malloc(4*Nl*Nx*sizeof(double));
+  if (sv==NULL) {perror("malloc");return(1);}
+  nthread = omp_get_num_threads();
+  cj = malloc(4*Nl*nthread*sizeof(double));
+  if (cj==NULL) {perror("malloc");return(1);}
+  sj = malloc(4*Nl*nthread*sizeof(double));
+  if (sj==NULL) {perror("malloc");return(1);}
+  dx = xmax/(Nx-1.0);
+  for (jmin=ix=0; ix<Nx; ix++) {
+    xx = ix * dx;
+    while (jmin<Nx && fabs(cost[jmin])<xx) jmin++;
+    jmax = jmin;
+    while (jmax<Nx && fabs(cost[jmax])<xx+dx) jmax++;
+    sc0 = sc1 = sc2 = sc3 = 0.0;
+    ss0 = ss1 = ss2 = ss3 = 0.0;
+#pragma omp parallel for private(ii,i0,i1,m,ax,tt,t1,t2,s0,s1,s2,s3), shared(jmin,jmax,dx,cost,cj,sj), schedule(static)
+    for (ii=jmin; ii<jmax; ii++) {
+      ithread = omp_get_thread_num();
+      ax  = fabs(cost[ii]);
+      i0  = ax/dx;
+      tt  = ax/dx-i0;
+      t1  = (tt-1.0)*(tt-1.0);
+      t2  = tt*tt;
+      s0  = (1+2*tt)*t1;
+      s1  = tt*t1;
+      s2  = t2*(3-2*tt);
+      s3  = t2*(tt-1.0);
+      for (m=0; m<Nl; m++) {
+        i1 = nthread*(4*Nl*Nx);
+        cj[i1+m] = s0*cos(m*phi[ii]);
+      }
+    }
+    for (ithread=1; ithread<nthread; ithread++) {
+      for (ii=0; ii<Nl*Nx; ii++)
+        cj[0*Nl*nthread+ii] = cj[ithread*Nl*nthread+ii];
+    }
+    jmin = jmax;
+  }
+  free(sj);free(cj);
+  free(sv);free(cv);
   return(0);
 }
