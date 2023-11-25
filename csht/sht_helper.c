@@ -158,6 +158,8 @@ double	tt,t1,t2,s0,s1,s2,s3;
       carr[indx(ell,m,Nl)] = sc;
       sarr[indx(ell,m,Nl)] = ss;
     }
+  return(0);
+}
 
 
 #ifdef  NOIGNORE
