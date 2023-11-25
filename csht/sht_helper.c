@@ -248,13 +248,12 @@ double  *cj,*sj;
         s1 = cj[1*Nl*Nx+Nl*i0+m];
         s2 = cj[2*Nl*Nx+Nl*i0+m];
         s3 = cj[3*Nl*Nx+Nl*i0+m];
-        carr[ii] += Yv[Nx*ii+i0+ix]*s0+Yd[i0+ix]*s1+Yv[i1+ix]*s2+Yd[i1+ix]*s3;                 
+        carr[ii] += Yv[Nx*ii+i0]*s0+Yd[Nx*ii+i0]*s1+Yv[Nx*ii+i1]*s2+Yd[Nx*ii+i1]*s3;                 
         s0 = sj[0*Nl*Nx+Nl*i0+m];
         s1 = sj[1*Nl*Nx+Nl*i0+m];
         s2 = sj[2*Nl*Nx+Nl*i0+m];
         s3 = sj[3*Nl*Nx+Nl*i0+m];
-        sarr[ii] += Yv[i0+ix]*s0+Yd[i0+ix]*s1
-                 +  Yv[i1+ix]*s2+Yd[i1+ix]*s3; 
+        sarr[ii] += Yv[Nx*ii+i0]*s0+Yd[Nx*ii+i0]*s1+Yv[Nx*ii+i1]*s2+Yd[Nx*ii+i1]*s3;
       }
     }
   free(sj);free(cj);
