@@ -173,17 +173,15 @@ int     ithread,nthread;
 double  xx,ax,dx,hh,sc,ss,yv;
 double  tt,t1,t2,s0,s1,s2,s3;
 double  sc0,sc1,sc2,sc3,ss0,ss1,ss2,ss3;
-double  *cv,*sv;
-  /* Make storage for the intermediate "v" arrays. */
-  cv = malloc(4*Nl*Nx*sizeof(double));
-  if (cv==NULL) {perror("malloc");return(1);}
-  sv = malloc(4*Nl*Nx*sizeof(double));
-  if (sv==NULL) {perror("malloc");return(1);}
+double  *cj,*sj;
+  /* Make storage for the intermediate "cj" arrays. */
   nthread = omp_get_num_threads();
-  cj = malloc(4*Nl*nthread*sizeof(double));
+  cj = malloc(4*Nl*Nx*nthread*sizeof(double));
   if (cj==NULL) {perror("malloc");return(1);}
-  sj = malloc(4*Nl*nthread*sizeof(double));
+  sj = malloc(4*Nl*Nx*nthread*sizeof(double));
   if (sj==NULL) {perror("malloc");return(1);}
+  /* and zero them. */
+  for (ii=0; ii<4*Nl*Nx*nthread; ii++) cj[ii]=sj[ii]=0;
   dx = xmax/(Nx-1.0);
   for (jmin=ix=0; ix<Nx; ix++) {
     xx = ix * dx;
@@ -192,31 +190,71 @@ double  *cv,*sv;
     while (jmax<Nx && fabs(cost[jmax])<xx+dx) jmax++;
     sc0 = sc1 = sc2 = sc3 = 0.0;
     ss0 = ss1 = ss2 = ss3 = 0.0;
-#pragma omp parallel for private(ii,i0,i1,m,ax,tt,t1,t2,s0,s1,s2,s3), shared(jmin,jmax,dx,cost,cj,sj), schedule(static)
+#pragma omp parallel for private(ii,i0,i1,ithread,m,ax,tt,t1,t2,s0,s1,s2,s3), shared(Nx,Nl,jmin,jmax,dx,cost,phi,wt,cj,sj), schedule(static)
     for (ii=jmin; ii<jmax; ii++) {
       ithread = omp_get_thread_num();
-      ax  = fabs(cost[ii]);
-      i0  = ax/dx;
-      tt  = ax/dx-i0;
-      t1  = (tt-1.0)*(tt-1.0);
-      t2  = tt*tt;
-      s0  = (1+2*tt)*t1;
-      s1  = tt*t1;
-      s2  = t2*(3-2*tt);
-      s3  = t2*(tt-1.0);
+      ax = fabs(cost[ii]);
+      i0 = ax/dx;
+      tt = ax/dx-i0;
+      t1 = (tt-1.0)*(tt-1.0);
+      t2 = tt*tt;
+      s0 = (1+2*tt)*t1;
+      s1 = tt*t1*dx;
+      s2 = t2*(3-2*tt);
+      s3 = t2*(tt-1.0)*dx;
+      i1 = ithread*(4*Nl*Nx)+0*Nl*Nx+Nl*ix;
       for (m=0; m<Nl; m++) {
-        i1 = nthread*(4*Nl*Nx);
-        cj[i1+m] = wt[ii]*s0*cos(m*phi[ii]);
+        cj[i1+m] += wt[ii]*s0*cos(m*phi[ii]);
+        sj[i1+m] += wt[ii]*s0*sin(m*phi[ii]);
+      }
+      i1 = ithread*(4*Nl*Nx)+1*Nl*Nx+Nl*ix;
+      for (m=0; m<Nl; m++) {
+        cj[i1+m] += wt[ii]*s1*cos(m*phi[ii]);
+        sj[i1+m] += wt[ii]*s1*sin(m*phi[ii]);
+      }
+      i1 = ithread*(4*Nl*Nx)+2*Nl*Nx+Nl*ix;
+      for (m=0; m<Nl; m++) {
+        cj[i1+m] += wt[ii]*s2*cos(m*phi[ii]);
+        sj[i1+m] += wt[ii]*s2*sin(m*phi[ii]);
+      }
+      i1 = ithread*(4*Nl*Nx)+3*Nl*Nx+Nl*ix;
+      for (m=0; m<Nl; m++) {
+        cj[i1+m] += wt[ii]*s3*cos(m*phi[ii]);
+        sj[i1+m] += wt[ii]*s3*sin(m*phi[ii]);
       }
     }
     for (ithread=1; ithread<nthread; ithread++) {
-      for (ii=0; ii<Nl*Nx; ii++)
-        cj[0*Nl*nthread+ii] = cj[ithread*Nl*nthread+ii];
+      for (ii=0; ii<4*Nl*Nx; ii++) {
+        cj[ii] += cj[ithread*(4*Nl*Nx)+ii];
+        sj[ii] += sj[ithread*(4*Nl*Nx)+ii];
+      }
     }
     jmin = jmax;
   }
+#pragma omp parallel for private(ii) shared(Nl,carr,sarr)
+  for (ii=0; ii<(Nl*(Nl+1))/2; ii++) {
+    carr[ii]=sarr[ii]=0.0;
+  }
+  for (ell=0; ell<Nl; ell++)
+    for (m=0; m<=ell; m++) {
+      ii = indx(ell,m,Nl);
+#pragma omp parallel for private(i0,i1,s0,s1,s2,s3) shared(Nl,Nx,ell,m,ix,ii,carr,sarr,cj,sj)
+      for (i0=0; i0<Nx-1; i0++) {
+        i1 = i0+1;
+        s0 = cj[0*Nl*Nx+Nl*i0+m];
+        s1 = cj[1*Nl*Nx+Nl*i0+m];
+        s2 = cj[2*Nl*Nx+Nl*i0+m];
+        s3 = cj[3*Nl*Nx+Nl*i0+m];
+        carr[ii] += Yv[Nx*ii+i0+ix]*s0+Yd[i0+ix]*s1+Yv[i1+ix]*s2+Yd[i1+ix]*s3;                 
+        s0 = sj[0*Nl*Nx+Nl*i0+m];
+        s1 = sj[1*Nl*Nx+Nl*i0+m];
+        s2 = sj[2*Nl*Nx+Nl*i0+m];
+        s3 = sj[3*Nl*Nx+Nl*i0+m];
+        sarr[ii] += Yv[i0+ix]*s0+Yd[i0+ix]*s1
+                 +  Yv[i1+ix]*s2+Yd[i1+ix]*s3; 
+      }
+    }
   free(sj);free(cj);
-  free(sv);free(cv);
   return(0);
 }
 
