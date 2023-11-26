@@ -17,7 +17,9 @@ try:
     from   jax import device_put, vmap, jit
 except ImportError:
     jax_present = False
+    device_put = lambda x: x  # Dummy definition for fallback
     print("JAX not found. Falling back to NumPy.")
+
 
 
 @nb.njit
@@ -134,7 +136,8 @@ class DirectSHT:
             t0 = time.time()
             # Sort the data in ascending order of theta
             sorted_idx = np.argsort(x)
-            x_data_sorted = x[sorted_idx]; w_i_sorted = wt[idx][sorted_idx]; phi_data_sorted = phi[idx][sorted_idx]
+            x_data_sorted = x[sorted_idx]; w_i_sorted = wt[idx][sorted_idx];
+            phi_data_sorted = phi[idx][sorted_idx]
             x_samples = self.x
             #
             t1 = time.time()
@@ -152,25 +155,31 @@ class DirectSHT:
             # Find the indices of transitions between bins
             transitions = utils.find_transitions(spline_idx)
             # Reshape the inputs into a 2D array for fast binning
-            reshaped_inputs = [device_put(utils.reshape_array(w_i_sorted * input_, transitions, bin_num, bin_len))
-                               for input_ in
-                               [(2 * t + 1) * (1 - t) ** 2, t * (1 - t) ** 2, t ** 2 * (3 - 2 * t), t ** 2 * (t - 1)]]
-            reshaped_phi_data = device_put(utils.reshape_array(phi_data_sorted, transitions, bin_num, bin_len))
+            reshaped_inputs = utils.reshape_vs_array([w_i_sorted * input_ for input_ in
+                                                      [(2*t+1)*(1-t)**2,t*(1-t)**2,t**2*(3-2*t)
+                                                          ,t**2*(t-1)]],transitions, bin_num,bin_len)
+
             # Make a mask to discard spurious zeros
-            mask = reshaped_inputs[0] != 0
-            reshaped_inputs = [input_ * mask for input_ in reshaped_inputs]
-            reshaped_phi_data *= mask
-            if jax_present:
-                # We'll want to move big arrays to GPU memory only once
-                Yv_jax = device_put(self.Yv[:, occupied_bins])
-                dYv_jax = device_put(self.Yd[:, occupied_bins])
+            mask = utils.reshape_array(np.ones_like(phi_data_sorted), transitions, bin_num, bin_len)
+            # Mask and put in GPU memory
+            reshaped_inputs = device_put(mask * reshaped_inputs)
+            reshaped_phi_data = device_put(mask * utils.reshape_array(phi_data_sorted,
+                                                                      transitions, bin_num, bin_len))
+
+            # Query only theta bins that have data
+            Yv_short = self.Yv[:, occupied_bins]
+            dYv_short = self.Yd[:, occupied_bins]
+            # If JAX is available, move big arrays to GPU
+            Yv_short = device_put(Yv_short)
+            dYv_short = device_put(dYv_short)
             #
             t15 = time.time()
-            if verbose: print("Digitizing took ",t15-t1," seconds.",flush=True)
+            if verbose: print("Digitizing & reshaping took ",t15-t1," seconds.",flush=True)
             #
-            # We now sum up all w_p f(t) in each spline region i
-            ms = np.arange(self.Nell, dtype=int)
-            vs_real, vs_imag = interp.get_vs(ms, reshaped_phi_data, reshaped_inputs)
+            # Precompute the v's
+            vs_real, vs_imag = interp.get_vs(self.Nell-1, reshaped_phi_data, reshaped_inputs)
+            # Clear some memory
+            del reshaped_inputs
             #
             t2 = time.time()
             if verbose:
@@ -178,26 +187,26 @@ class DirectSHT:
             #
             if jax_present:
                 # Rearrange by m value of every a_lm index.
-                # TODO: This is very memory-inefficient, but it makes it very easy to batch over with JAX's vmap...
+                # TODO: This is rather memory-inefficient, but it makes it very easy to
+                # batch over with JAX's vmap. For lmax=500, each vs_* is O(1GB). For
+                # lmax=1000, each vs_* is O(4GB). We might want to consider alternatives
                 vs_real, vs_imag = [vs[m_ordering, :, :] for vs in [vs_real, vs_imag]]
-                # Move arrays to GPU memory
-                vs_real, vs_imag = [device_put(vs) for vs in [vs_real, vs_imag]]
                 # Get a grid of all alm's -- best run on a GPU!
                 get_all_alms_w_jax = vmap(jit(interp.get_alm_jax),in_axes=(0,0,0))
-                # Notice we put the Ylm and dYlm tables in device memory for a speed boost
-                alm_grid_real = get_all_alms_w_jax(Yv_jax, dYv_jax, vs_real)
-                alm_grid_imag = get_all_alms_w_jax(Yv_jax, dYv_jax, vs_imag)
+                # Notice we've put the Ylm and dYlm tables in device memory for a speed boost
+                alm_grid_real = get_all_alms_w_jax(Yv_short, dYv_short, vs_real)
+                alm_grid_imag = get_all_alms_w_jax(Yv_short, dYv_short, vs_imag)
                 alm_grid = (np.array(alm_grid_real, dtype='complex128')
                             - 1j *np.array(alm_grid_imag, dtype='complex128'))
             else:
                 # JIT compile the get_alm function and vectorize it
                 get_alm_jitted = nb.jit(nopython=True)(interp.get_alm_np)
                 #
-                alm_grid = np.zeros(len(self.Yv[:,0]), dtype='complex128')
+                alm_grid = np.zeros(len(Yv_short[:,0]), dtype='complex128')
                 vs_tot = vs_real - 1j * vs_imag
                 #TODO: parallelize this
                 for i, (Ylm, dYlm, m) in \
-                  enumerate(zip(self.Yv,self.Yd,m_ordering)):
+                  enumerate(zip(Yv_short,dYv_short,m_ordering)):
                     alm_grid[i] = get_alm_jitted(Ylm, dYlm, vs_tot, m)
             # For x<0, we need to multiply by (-1)^{ell-m}
             alm_grid_tot += par_fact * alm_grid

@@ -39,6 +39,24 @@ def reshape_array(data, transitions, bin_num, bin_len):
         fill_in = data[transitions[i]:transitions[i+1]]
         data_reshaped[i,:len(fill_in)] = fill_in
     return data_reshaped
+
+def reshape_vs_array(inputs, transitions, bin_num, bin_len):
+    '''
+    #TODO: document better
+    :param inputs: list of four 1D numpy array of data to be binned
+    :param transitions: 1D numpy array of indices where the value in data changes (includes 0)
+    :param bin_num: int. Number of bins where there is data
+    :param bin_len: int. Maximum number of points in a bin
+    :return: 2D numpy array of reshaped data, zero padded in bins with fewer points
+    '''
+    # Dimensions: vs label, bin_num, bin_len
+    data_reshaped = np.zeros((4,bin_num, bin_len))
+    for i in range(bin_num-1):
+        for j, input_ in enumerate(inputs):
+            fill_in = input_[transitions[i]:transitions[i+1]]
+            data_reshaped[j,i,:len(fill_in)] = fill_in
+    return data_reshaped
+
 def getlm(lmax, szalm, i=None):
     """Get the l and m from index and lmax. From Healpy
 
