@@ -41,7 +41,7 @@ class DirectSHT:
         self.mylib.make_table(ct.c_int(Nell),ct.c_int(Nx),ct.c_double(xmax),\
                               ct.byref(self.Yv),ct.byref(self.Yd))
         #
-    def __call__(self,theta,phi,wt,verbose=True):
+    def __call__(self,theta,phi,wt):
         """
         Returns alm for a collection of real-valued points at (theta,phi),
         in radians, with weights wt.
@@ -74,6 +74,71 @@ class DirectSHT:
         carr,sarr = np.array(carr[:]),np.array(sarr[:])
         res = carr - 1j*sarr
         return( res )
+    def experimental_call(self,theta,phi,wt):
+        """
+        KEPT FOR ARCHIVAL PURPOSES/DEBUGGING.
+        Returns alm for a collection of real-valued points at (theta,phi),
+        in radians, with weights wt.
+        :param theta: 1D numpy array of theta values for each point.
+         Must be between [0,pi].
+        :param phi: 1D numpy array of phi values for each point.
+         Must be between [0,2pi].
+        :param wt: 1D numpy array of weights for each point.
+        :return: alm in the Healpix indexing convention,
+                 i.e., complex coefficients alm[m*(2*lmax+1-m)/2+l]
+                 with l in [0, lmax] and m in [0, l]
+        """
+        assert len(theta)==len(phi) and \
+               len(phi)==len(wt),"theta,phi,wt must be the same length."
+        assert np.all( (theta>=0) & (theta>np.arccos(self.xmax)) & (theta<np.arccos(-self.xmax))),\
+               "theta must be in [ACos[xmax],ACos[-xmax])."
+        # Make space for the cosine and sine components, as c_double_Array objects.
+        carr = (ct.c_double*self.Nlm)()
+        sarr = (ct.c_double*self.Nlm)()
+        alm  = np.zeros(self.Nlm,dtype='complex128')
+        # We need to break theta into positive and negative cos(theta) and
+        # treat them separately.
+        cost = np.cos(theta)
+        ww   = np.nonzero(cost<0)[0]
+        if len(ww)>0:
+            Npnt = len(ww)
+            ii   = ww[np.argsort(-cost[ww])]
+            # Convert theta, phi and wt to c_double_Arrays and take cos(theta).
+            tt = (ct.c_double*Npnt)()
+            pp = (ct.c_double*Npnt)()
+            ww = (ct.c_double*Npnt)()
+            tt[:],pp[:],ww[:] = cost[ii],phi[ii],wt[ii]
+            self.mylib.fast_transform(\
+                ct.c_int(self.Nell),ct.c_int(self.Nx),ct.c_double(self.xmax),\
+                ct.byref(self.Yv),ct.byref(self.Yd),\
+                ct.c_int(Npnt),ct.byref(tt),ct.byref(pp),ct.byref(ww),\
+                ct.byref(carr),ct.byref(sarr))
+            # Generate complex a_{lm} from sine and cosine components.
+            alm += np.array(carr[:])-1j*np.array(sarr[:])
+            # Insert phase factor (-1)^(ell-m).  This is slow but, ok.
+            for ell in range(self.Nell):
+                for m in range(1-(ell%2),ell+1,2):
+                    alm[self.indx(ell,m)] *= -1.0
+        #
+        # Now treat the non-negative cos(theta).
+        ww = np.nonzero(cost>=0)[0]
+        if len(ww)>0:
+            Npnt = len(ww)
+            ii   = ww[np.argsort(cost[ww])]
+            # Convert theta, phi and wt to c_double_Arrays and take cos(theta).
+            tt = (ct.c_double*Npnt)()
+            pp = (ct.c_double*Npnt)()
+            ww = (ct.c_double*Npnt)()
+            tt[:],pp[:],ww[:] = cost[ii],phi[ii],wt[ii]
+            self.mylib.fast_transform(\
+                ct.c_int(self.Nell),ct.c_int(self.Nx),ct.c_double(self.xmax),\
+                ct.byref(self.Yv),ct.byref(self.Yd),\
+                ct.c_int(Npnt),ct.byref(tt),ct.byref(pp),ct.byref(ww),\
+                ct.byref(carr),ct.byref(sarr))
+            # No phase factor to worry about.
+            alm += np.array(carr[:])-1j*np.array(sarr[:])
+        return(alm)
+        #
     def indx(self,ell,m):
         """
         The index in the grid storing Ylm for ell>=0, 0<=m<=ell.

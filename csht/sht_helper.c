@@ -1,5 +1,5 @@
 #include	<stdlib.h>
-#include  <stdio.h>
+#include	<stdio.h>
 #include	<math.h>
 #include	"omp.h"
 
@@ -17,7 +17,7 @@ int	ii;
 int	make_table(int Nl, int Nx, double xmax, double Yv[], double Yd[]) {
 /* Makes the function value and derivative tables: Yv, Yd. */
 int	ell,m,ix,ii,i0,i1,i2;
-double	xx,sx,omx2,dx,fact1,fact2;
+double	xx,omx2,dx,fact1,fact2;
   dx = xmax/(Nx-1.0);
   /* First do Legendre polynomials. */
 #pragma omp parallel for private(ix), shared(Nx,dx,Yv)
@@ -115,6 +115,9 @@ double	xx,sx,omx2,dx,fact1,fact2;
 
 
 
+
+
+
 int	do_transform(int Nl, int Nx, double xmax, double Yv[], double Yd[],
                      int Np, double cost[], double phi[], double wt[],
                      double carr[], double sarr[]) {
@@ -122,7 +125,7 @@ int	do_transform(int Nl, int Nx, double xmax, double Yv[], double Yd[],
    version keeps memory usage to a minimum at the expense of redoing
    the interpolation in x for each (ell,m). */
 int	ell,m,ii,ix,offset,i0,i1;
-double	xx,ax,dx,hh,sc,ss,yv;
+double	xx,ax,dx,sc,ss,yv;
 double	tt,t1,t2,s0,s1,s2,s3;
   /* Zero the carr and sarr -- not really necessary. */
 #pragma omp parallel for private(ii) shared(Nl,carr,sarr)
@@ -165,20 +168,23 @@ double	tt,t1,t2,s0,s1,s2,s3;
 
 #ifdef  NOIGNORE
   
+
+/* The following code is currently both slow and incorrect. */
+
 int	fast_transform(int Nl, int Nx, double xmax, double Yv[], double Yd[],
-                   int Np, double cost[], double phi[], double wt[],
-                   double carr[], double sarr[]) {
+                       int Np, double cost[], double phi[], double wt[],
+                       double carr[], double sarr[]) {
 /* Does the direct SHT, filling in the cosine and sine arrays.  This
    version is faster than do_transform, but uses more memory.  The
-   objects must be sorted in order of increasing cost. */
-int     ell,m,ii,ix,offset,i0,i1,jmin,jmax;
+   objects must be sorted in order of increasing cost, and it is assumed
+   the phase factor for cost<0 will be applied externally. */
+int     ell,m,ii,ix,i0,i1,jmin,jmax;
 int     ithread,nthread;
-double  xx,ax,dx,hh,sc,ss,yv;
+double  xx,ax,dx;
 double  tt,t1,t2,s0,s1,s2,s3;
-double  sc0,sc1,sc2,sc3,ss0,ss1,ss2,ss3;
 double  *cj,*sj;
   /* Make storage for the intermediate "cj" arrays. */
-  nthread = omp_get_num_threads();
+  nthread = omp_get_max_threads();
   cj = malloc(4*Nl*Nx*nthread*sizeof(double));
   if (cj==NULL) {perror("malloc");return(1);}
   sj = malloc(4*Nl*Nx*nthread*sizeof(double));
@@ -188,11 +194,9 @@ double  *cj,*sj;
   dx = xmax/(Nx-1.0);
   for (jmin=ix=0; ix<Nx; ix++) {
     xx = ix * dx;
-    while (jmin<Nx && fabs(cost[jmin])<xx) jmin++;
+    while (jmin<Np && fabs(cost[jmin])< xx  ) jmin++;
     jmax = jmin;
-    while (jmax<Nx && fabs(cost[jmax])<xx+dx) jmax++;
-    sc0 = sc1 = sc2 = sc3 = 0.0;
-    ss0 = ss1 = ss2 = ss3 = 0.0;
+    while (jmax<Np && fabs(cost[jmax])<xx+dx) jmax++;
 #pragma omp parallel for private(ii,i0,i1,ithread,m,ax,tt,t1,t2,s0,s1,s2,s3), shared(Nx,Nl,jmin,jmax,dx,cost,phi,wt,cj,sj), schedule(static)
     for (ii=jmin; ii<jmax; ii++) {
       ithread = omp_get_thread_num();
