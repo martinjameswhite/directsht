@@ -53,7 +53,7 @@ if __name__=="__main__":
     print("\nDerivatives:")
     Ym = np.zeros( ((Nl*(Nl+1))//2,Nx) )
     Ym[sht.indx( 2, 0),:] = 3*sht.x * np.sqrt(5/4./np.pi)
-    Ym[sht.indx(10,10),:] = -4.19758*sht.x*(1-sht.x**2)**4*np.sqrt(21/4./np.pi)
+    Ym[sht.indx(10,10),:] = -5.42630291944221461*sht.x*(1-sht.x**2)**4
     Yd = np.array(sht.Yd[:]).reshape(((Nl*(Nl+1))//2,Nx))
     for ell,m in zip([2,10],[0,10]):
         lbs,mys,j = "","",sht.indx(ell,m)
