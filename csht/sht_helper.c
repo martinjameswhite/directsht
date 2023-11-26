@@ -211,6 +211,8 @@ double  *cj,*sj;
       s3 = t2*(tt-1.0)*dx;
       i1 = ithread*(4*Nl*Nx)+0*Nl*Nx+Nl*ix;
       for (m=0; m<Nl; m++) {
+        /* We could potentially use trig identities for
+           cos(m phi) and sin(m phi) to save time. */
         cj[i1+m] += wt[ii]*s0*cos(m*phi[ii]);
         sj[i1+m] += wt[ii]*s0*sin(m*phi[ii]);
       }
