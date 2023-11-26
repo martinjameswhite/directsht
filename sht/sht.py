@@ -61,7 +61,7 @@ def ext_der_slow_recurrence(Nl,xx,Yv,Yd):
 
 class DirectSHT:
     """Brute-force spherical harmonic transforms."""
-    def __init__(self,Nell,Nx,xmax=0.9):
+    def __init__(self,Nell,Nx,xmax=0.875):
         """Initialize the class, build the interpolation tables.
         :param  Nell: Number of ells, and hence ms.
         :param  Nx:   Number of x grid points.
