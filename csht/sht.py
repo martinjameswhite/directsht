@@ -41,8 +41,9 @@ class DirectSHT:
         self.mylib.make_table(ct.c_int(Nell),ct.c_int(Nx),ct.c_double(xmax),\
                               ct.byref(self.Yv),ct.byref(self.Yd))
         #
-    def __call__(self,theta,phi,wt):
+    def old_call(self,theta,phi,wt):
         """
+        KEPT FOR ARCHIVAL PURPOSES/DEBUGGING.
         Returns alm for a collection of real-valued points at (theta,phi),
         in radians, with weights wt.
         :param theta: 1D numpy array of theta values for each point.
@@ -74,9 +75,8 @@ class DirectSHT:
         carr,sarr = np.array(carr[:]),np.array(sarr[:])
         res = carr - 1j*sarr
         return( res )
-    def experimental_call(self,theta,phi,wt):
+    def __call__(self,theta,phi,wt):
         """
-        KEPT FOR ARCHIVAL PURPOSES/DEBUGGING.
         Returns alm for a collection of real-valued points at (theta,phi),
         in radians, with weights wt.
         :param theta: 1D numpy array of theta values for each point.
@@ -108,7 +108,7 @@ class DirectSHT:
             pp = (ct.c_double*Npnt)()
             ww = (ct.c_double*Npnt)()
             tt[:],pp[:],ww[:] = cost[ii],phi[ii],wt[ii]
-            self.mylib.fast_transform(\
+            self.mylib.do_transform(\
                 ct.c_int(self.Nell),ct.c_int(self.Nx),ct.c_double(self.xmax),\
                 ct.byref(self.Yv),ct.byref(self.Yd),\
                 ct.c_int(Npnt),ct.byref(tt),ct.byref(pp),ct.byref(ww),\
@@ -130,7 +130,7 @@ class DirectSHT:
             pp = (ct.c_double*Npnt)()
             ww = (ct.c_double*Npnt)()
             tt[:],pp[:],ww[:] = cost[ii],phi[ii],wt[ii]
-            self.mylib.fast_transform(\
+            self.mylib.do_transform(\
                 ct.c_int(self.Nell),ct.c_int(self.Nx),ct.c_double(self.xmax),\
                 ct.byref(self.Yv),ct.byref(self.Yd),\
                 ct.c_int(Npnt),ct.byref(tt),ct.byref(pp),ct.byref(ww),\

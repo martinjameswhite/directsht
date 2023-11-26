@@ -115,6 +115,7 @@ double	xx,omx2,dx,fact1,fact2;
 
 
 
+#ifdef	SMALLMEM
 
 
 
@@ -123,7 +124,7 @@ int	do_transform(int Nl, int Nx, double xmax, double Yv[], double Yd[],
                      double carr[], double sarr[]) {
 /* Does the direct SHT, filling in the cosine and sine arrays.  This
    version keeps memory usage to a minimum at the expense of redoing
-   the interpolation in x for each (ell,m). */
+   the interpolation in x for each (ell,m), which is slow. */
 int	ell,m,ii,ix,offset,i0,i1;
 double	xx,ax,dx,sc,ss,yv;
 double	tt,t1,t2,s0,s1,s2,s3;
@@ -166,23 +167,23 @@ double	tt,t1,t2,s0,s1,s2,s3;
 }
 
 
-#ifdef  NOIGNORE
+#else
   
 
 /* The following code is currently both slow and incorrect. */
 
-int	fast_transform(int Nl, int Nx, double xmax, double Yv[], double Yd[],
-                       int Np, double cost[], double phi[], double wt[],
-                       double carr[], double sarr[]) {
+int	do_transform(int Nl, int Nx, double xmax, double Yv[], double Yd[],
+                     int Np, double cost[], double phi[], double wt[],
+                     double carr[], double sarr[]) {
 /* Does the direct SHT, filling in the cosine and sine arrays.  This
-   version is faster than do_transform, but uses more memory.  The
-   objects must be sorted in order of increasing cost, and it is assumed
+   version is faster than the above, but uses more memory.  The objects
+   must also be sorted in order of increasing cost, and it is assumed
    the phase factor for cost<0 will be applied externally. */
-int     ell,m,ii,ix,i0,i1,jmin,jmax;
-int     ithread,nthread;
+int     ell,m,ii,jj,ix,i0,i1,jmin,jmax;
+int     ithread,nthread,Nlm;
 double  xx,ax,dx;
 double  tt,t1,t2,s0,s1,s2,s3;
-double  *cj,*sj;
+double  *cj,*sj,*csum,*ssum;
   /* Make storage for the intermediate "cj" arrays. */
   nthread = omp_get_max_threads();
   cj = malloc(4*Nl*Nx*nthread*sizeof(double));
@@ -232,37 +233,52 @@ double  *cj,*sj;
         sj[i1+m] += wt[ii]*s3*sin(m*phi[ii]);
       }
     }
-    for (ithread=1; ithread<nthread; ithread++) {
-      for (ii=0; ii<4*Nl*Nx; ii++) {
-        cj[ii] += cj[ithread*(4*Nl*Nx)+ii];
-        sj[ii] += sj[ithread*(4*Nl*Nx)+ii];
-      }
-    }
     jmin = jmax;
   }
-#pragma omp parallel for private(ii) shared(Nl,carr,sarr)
-  for (ii=0; ii<(Nl*(Nl+1))/2; ii++) {
-    carr[ii]=sarr[ii]=0.0;
+  for (ithread=1; ithread<nthread; ithread++) {
+    for (ii=0; ii<4*Nl*Nx; ii++) {
+      cj[ii] += cj[ithread*(4*Nl*Nx)+ii];
+      sj[ii] += sj[ithread*(4*Nl*Nx)+ii];
+    }
   }
+  /* Now do the sums over x-bins. */
+  Nlm = (Nl*(Nl+1))/2;
+  csum = malloc(Nlm*nthread*sizeof(double));
+  if (csum==NULL) {perror("malloc");return(1);}
+  ssum = malloc(Nlm*nthread*sizeof(double));
+  if (ssum==NULL) {perror("malloc");return(1);}
+#pragma omp parallel for private(jj) shared(Nlm,nthread,csum,ssum)
+  for (jj=0; jj<Nlm*nthread; jj++) {csum[jj]=ssum[jj]=0.0;}
   for (ell=0; ell<Nl; ell++)
     for (m=0; m<=ell; m++) {
       ii = indx(ell,m,Nl);
-#pragma omp parallel for private(i0,i1,s0,s1,s2,s3) shared(Nl,Nx,ell,m,ix,ii,carr,sarr,cj,sj)
+#pragma omp parallel for private(jj,i0,i1,s0,s1,s2,s3) shared(Nl,Nx,Nlm,nthread,csum,ssum)
       for (i0=0; i0<Nx-1; i0++) {
+        ithread = omp_get_thread_num();
+        jj = ithread*Nlm + ii;
         i1 = i0+1;
         s0 = cj[0*Nl*Nx+Nl*i0+m];
         s1 = cj[1*Nl*Nx+Nl*i0+m];
         s2 = cj[2*Nl*Nx+Nl*i0+m];
         s3 = cj[3*Nl*Nx+Nl*i0+m];
-        carr[ii] += Yv[Nx*ii+i0]*s0+Yd[Nx*ii+i0]*s1+Yv[Nx*ii+i1]*s2+Yd[Nx*ii+i1]*s3;                 
+        csum[jj] += Yv[Nx*ii+i0]*s0+Yd[Nx*ii+i0]*s1+Yv[Nx*ii+i1]*s2+Yd[Nx*ii+i1]*s3;                 
         s0 = sj[0*Nl*Nx+Nl*i0+m];
         s1 = sj[1*Nl*Nx+Nl*i0+m];
         s2 = sj[2*Nl*Nx+Nl*i0+m];
         s3 = sj[3*Nl*Nx+Nl*i0+m];
-        sarr[ii] += Yv[Nx*ii+i0]*s0+Yd[Nx*ii+i0]*s1+Yv[Nx*ii+i1]*s2+Yd[Nx*ii+i1]*s3;
+        ssum[jj] += Yv[Nx*ii+i0]*s0+Yd[Nx*ii+i0]*s1+Yv[Nx*ii+i1]*s2+Yd[Nx*ii+i1]*s3;
       }
     }
   free(sj);free(cj);
+#pragma omp parallel for private(ii) shared(ix,carr,sarr) schedule(static)
+  for (ii=0; ii<Nlm; ii++) {carr[ii]=sarr[ii]=0.0;}
+  for (ithread=0; ithread<nthread; ithread++) {
+    for (ii=0; ii<Nlm; ii++) {
+      carr[ii] += csum[ithread*Nlm+ii];
+      sarr[ii] += ssum[ithread*Nlm+ii];
+    }
+  }
+  free(ssum);free(csum);
   return(0);
 }
 
