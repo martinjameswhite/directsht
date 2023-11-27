@@ -148,30 +148,35 @@ class DirectSHT:
             t = x_data_sorted - x_samples[spline_idx]
             #
             # Find the number of different bins that are populated
-            occupied_bins = utils.insert_next_integer(np.unique(spline_idx))
+            occupied_bins = np.unique(spline_idx)
             bin_num = len(occupied_bins)
             # Then, we find the maximum number of points in a bin
             bin_len = mode(spline_idx).count
             # Find the indices of edges between bins
-            bin_edges = utils.find_bin_edges(spline_idx)
+            transitions = utils.find_transitions(spline_idx)
             # Reshape the inputs into a 2D array for fast binning
             reshaped_inputs = utils.reshape_vs_array([w_i_sorted * input_ for input_ in
                                                       [(2*t+1)*(1-t)**2,t*(1-t)**2,t**2*(3-2*t)
-                                                          ,t**2*(t-1)]],bin_edges, bin_num,bin_len)
+                                                          ,t**2*(t-1)]], transitions, bin_num,bin_len)
 
             # Make a mask to discard spurious zeros
-            mask = utils.reshape_array(np.ones_like(phi_data_sorted), bin_edges, bin_num, bin_len)
+            mask = utils.reshape_array(np.ones_like(phi_data_sorted), transitions, bin_num, bin_len)
             # Mask and put in GPU memory
             reshaped_inputs = device_put(mask * reshaped_inputs)
-            reshaped_phi_data = device_put(mask * utils.reshape_array(phi_data_sorted,
-                                                                      bin_edges, bin_num, bin_len))
+            reshaped_phi_data = device_put(mask * utils.reshape_array(phi_data_sorted, transitions, bin_num, bin_len))
 
             # Query only theta bins that have data
-            Yv_short = self.Yv[:, occupied_bins]
-            dYv_short = self.Yd[:, occupied_bins]
+            Yv_i_short = self.Yv[:, occupied_bins]
+            Yv_ip1_short = self.Yv[:, occupied_bins+1]
+            dYv_i_short = self.Yd[:, occupied_bins]
+            dYv_ip1_short = self.Yd[:, occupied_bins+1]
+
             # If JAX is available, move big arrays to GPU
-            Yv_short = device_put(Yv_short)
-            dYv_short = device_put(dYv_short)
+            Yv_i_short = device_put(Yv_i_short)
+            Yv_ip1_short = device_put(Yv_ip1_short)
+            dYv_i_short = device_put(dYv_i_short)
+            dYv_ip1_short = device_put(dYv_ip1_short)
+
             #
             t15 = time.time()
             if verbose: print("Digitizing & reshaping took ",t15-t1," seconds.",flush=True)
@@ -192,22 +197,22 @@ class DirectSHT:
                 # lmax=1000, each vs_* is O(4GB). We might want to consider alternatives
                 vs_real, vs_imag = [vs[m_ordering, :, :] for vs in [vs_real, vs_imag]]
                 # Get a grid of all alm's -- best run on a GPU!
-                get_all_alms_w_jax = vmap(jit(interp.get_alm_jax),in_axes=(0,0,0))
+                get_all_alms_w_jax = vmap(jit(interp.get_alm_jax),in_axes=(0,0,0,0,0))
                 # Notice we've put the Ylm and dYlm tables in device memory for a speed boost
-                alm_grid_real = get_all_alms_w_jax(Yv_short, dYv_short, vs_real)
-                alm_grid_imag = get_all_alms_w_jax(Yv_short, dYv_short, vs_imag)
+                alm_grid_real = get_all_alms_w_jax(Yv_i_short, Yv_ip1_short, dYv_i_short, dYv_ip1_short, vs_real)
+                alm_grid_imag = get_all_alms_w_jax(Yv_i_short, Yv_ip1_short, dYv_i_short, dYv_ip1_short, vs_imag)
                 alm_grid = (np.array(alm_grid_real, dtype='complex128')
                             - 1j *np.array(alm_grid_imag, dtype='complex128'))
             else:
                 # JIT compile the get_alm function and vectorize it
-                get_alm_jitted = interp.get_alm_np#nb.jit(nopython=True)(interp.get_alm_np)
+                get_alm_jitted = nb.jit(nopython=True)(interp.get_alm_np)
                 #
-                alm_grid = np.zeros(len(Yv_short[:,0]), dtype='complex128')
+                alm_grid = np.zeros(len(Yv_i_short[:,0]), dtype='complex128')
                 vs_tot = vs_real - 1j * vs_imag
                 #TODO: parallelize this
-                for i, (Ylm, dYlm, m) in \
-                  enumerate(zip(Yv_short,dYv_short,m_ordering)):
-                    alm_grid[i] = get_alm_jitted(Ylm, dYlm, vs_tot, m)
+                for i, (Ylm_i, Ylm_ip1, dYlm_i, dYlm_ip1, m) in \
+                  enumerate(zip(Yv_i_short, Yv_ip1_short, dYv_i_short, dYv_ip1_short,m_ordering)):
+                    alm_grid[i] = get_alm_jitted(Ylm_i, Ylm_ip1, dYlm_i, dYlm_ip1, vs_tot, m)
             # For x<0, we need to multiply by (-1)^{ell-m}
             alm_grid_tot += par_fact * alm_grid
             t3 = time.time()

@@ -58,7 +58,7 @@ def get_vs_at_m(m, phi_data_reshaped, reshaped_inputs):
                   [jnp.cos(m * phi_data_reshaped), jnp.sin(m * phi_data_reshaped)]]
     return vs_r, vs_i
 
-def get_alm_jax(Ylm, dYlm, vs):
+def get_alm_jax(Ylm_i, Ylm_ip1, dYlm_i, dYlm_ip1, vs):
     """
     The key function: get alm by summing over all interpolated weighted
     Y_lm's using JAX. Interpolation uses cubic Hermite splines
@@ -70,10 +70,10 @@ def get_alm_jax(Ylm, dYlm, vs):
     :param m: m value of the alm we want to calculate
     :return: a 1D numpy array with the alm value
     """
-    return(jnp.sum(Ylm[:-1] * vs[0,:-1] + dYlm[:-1] * vs[1,:-1] +\
-                   Ylm[ 1:] * vs[2,1:] + dYlm[ 1:] * vs[3,1:]))
+    return(jnp.sum(Ylm_i * vs[0] + dYlm_i * vs[1] +\
+                   Ylm_ip1 * vs[2] + dYlm_ip1 * vs[3]))
 
-def get_alm_np(Ylm, dYlm, vs, m):
+def get_alm_np(Ylm_i, Ylm_ip1, dYlm_i, dYlm_ip1, vs, m):
     """
     The key function: get alm by summing over all interpolated weighted
     Y_lm's using Numpy. Interpolation uses cubic Hermite splines
@@ -85,5 +85,5 @@ def get_alm_np(Ylm, dYlm, vs, m):
     :param m: m value of the alm we want to calculate
     :return: a 1D numpy array with the alm value
     """
-    return(np.sum(Ylm[:-1] * vs[m,0,:-1] + dYlm[:-1] * vs[m,1,:-1] +\
-                   Ylm[ 1:] * vs[m,2,1:] + dYlm[ 1:] * vs[m,3,1:]))
+    return(np.sum(Ylm_i * vs[m,0] + dYlm_i * vs[m,1] +\
+                   Ylm_ip1 * vs[m,2] + dYlm_ip1 * vs[m,3]))
