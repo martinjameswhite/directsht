@@ -88,11 +88,12 @@ class DirectSHT:
         Returns alm for a collection of real-valued points at (theta,phi),
         in radians, with weights wt.
         :param theta: 1D numpy array of theta values for each point.
-         Must be between [0,pi].
+         Must be between [0,pi], and also satisfy [ACos[xmax],ACos[-xmax]
         :param phi: 1D numpy array of phi values for each point.
          Must be between [0,2pi].
         :param wt: 1D numpy array of weights for each point.
-        :param reg_factor: Scaling to apply to weights to avoid numerical over/underflow. It gets removed at the end.
+        :param reg_factor: Scaling to apply to weights to avoid numerical
+         over/underflow. It gets removed at the end.
         :param verbose: if True, print out timing information.
         :return: alm in the Healpix indexing convention,
                  i.e., complex coefficients alm[m*(2*lmax+1-m)/2+l]
@@ -122,16 +123,20 @@ class DirectSHT:
         pos_idx,neg_idx = ([i for i, value in enumerate(x_full) if value >= 0],\
                            [i for i, value in enumerate(x_full) if value <  0])
         if pos_idx and neg_idx:
+            # The case where there's both +ve and -ve values of x
             which_case = zip([x_full[pos_idx],np.abs(x_full[neg_idx])],\
                              [1.,parity_factor],[pos_idx,neg_idx])
         elif pos_idx:
+            # The case where there's only +ve values of x
             which_case = zip([x_full[pos_idx]],[1.],[pos_idx])
         elif neg_idx:
+            # The case where there's only -ve values of x
             which_case = zip([np.abs(x_full[neg_idx])],[parity_factor],\
                              [neg_idx])
         else:
             raise ValueError("The theta array seems to be empty!")
         #
+        # Treat +ve and -ve x separately
         for x, par_fact, idx in which_case:
             t0 = time.time()
             # Sort the data in ascending order of theta
@@ -147,35 +152,32 @@ class DirectSHT:
             spline_idx = np.digitize(x_data_sorted, x_samples) - 1
             t = x_data_sorted - x_samples[spline_idx]
             #
-            # Find the number of different bins that are populated
+            # Find which bins (bounded by the elements of x_samples) are populated
             occupied_bins = np.unique(spline_idx)
             bin_num = len(occupied_bins)
             # Then, we find the maximum number of points in a bin
             bin_len = mode(spline_idx).count
-            # Find the indices of edges between bins
+            # Find the data indices where transitions btw splines/bins happen
             transitions = utils.find_transitions(spline_idx)
-            # Reshape the inputs into a 2D array for fast binning
-            reshaped_inputs = utils.reshape_vs_array([w_i_sorted * input_ for input_ in
-                                                      [(2*t+1)*(1-t)**2,t*(1-t)**2,t**2*(3-2*t)
-                                                          ,t**2*(t-1)]], transitions, bin_num,bin_len)
-
-            # Make a mask to discard spurious zeros
-            mask = utils.reshape_array(np.ones_like(phi_data_sorted), transitions, bin_num, bin_len)
+            # Reshape the inputs into a 2D array for fast binning during
+            # computation of the v's. Our binning scheme involves zero-padding bins with fewer
+            # than bin_len points, but cos(0)=1!=0, so we need a mask to discard spurious zeros!
+            mask = utils.reshape_phi_array(np.ones_like(phi_data_sorted), transitions, bin_num, bin_len)
             # Mask and put in GPU memory
+            reshaped_phi_data = device_put(mask * utils.reshape_phi_array(phi_data_sorted,
+                                                                          transitions, bin_num, bin_len))
+            # Repeat the process for  the other required inputs
+            reshaped_inputs = utils.reshape_aux_array([w_i_sorted*input_ for input_ in
+                                                      [(2*t+1)*(1-t)**2,t*(1-t)**2,t**2*(3-2*t)
+                                                          ,t**2*(t-1)]], transitions, bin_num, bin_len)
             reshaped_inputs = device_put(mask * reshaped_inputs)
-            reshaped_phi_data = device_put(mask * utils.reshape_array(phi_data_sorted, transitions, bin_num, bin_len))
 
             # Query only theta bins that have data
-            Yv_i_short = self.Yv[:, occupied_bins]
-            Yv_ip1_short = self.Yv[:, occupied_bins+1]
-            dYv_i_short = self.Yd[:, occupied_bins]
-            dYv_ip1_short = self.Yd[:, occupied_bins+1]
-
+            Yv_i_short = self.Yv[:, occupied_bins]; Yv_ip1_short = self.Yv[:, occupied_bins+1]
+            dYv_i_short = self.Yd[:, occupied_bins]; dYv_ip1_short = self.Yd[:, occupied_bins+1]
             # If JAX is available, move big arrays to GPU
-            Yv_i_short = device_put(Yv_i_short)
-            Yv_ip1_short = device_put(Yv_ip1_short)
-            dYv_i_short = device_put(dYv_i_short)
-            dYv_ip1_short = device_put(dYv_ip1_short)
+            Yv_i_short = device_put(Yv_i_short); Yv_ip1_short = device_put(Yv_ip1_short)
+            dYv_i_short = device_put(dYv_i_short); dYv_ip1_short = device_put(dYv_ip1_short)
 
             #
             t15 = time.time()
@@ -183,8 +185,7 @@ class DirectSHT:
             #
             # Precompute the v's
             vs_real, vs_imag = interp.get_vs(self.Nell-1, reshaped_phi_data, reshaped_inputs)
-            # Clear some memory
-            del reshaped_inputs
+
             #
             t2 = time.time()
             if verbose:
@@ -192,19 +193,21 @@ class DirectSHT:
             #
             if jax_present:
                 # Rearrange by m value of every a_lm index.
-                # TODO: This is rather memory-inefficient, but it makes it very easy to
+                # This is rather memory-inefficient, but it makes it very easy to
                 # batch over with JAX's vmap. For lmax=500, each vs_* is O(1GB). For
                 # lmax=1000, each vs_* is O(4GB). We might want to consider alternatives
                 vs_real, vs_imag = [vs[m_ordering, :, :] for vs in [vs_real, vs_imag]]
-                # Get a grid of all alm's -- best run on a GPU!
+                # Get a grid of all alm's by batching over (ell,m) -- best run on a GPU!
                 get_all_alms_w_jax = vmap(jit(interp.get_alm_jax),in_axes=(0,0,0,0,0))
                 # Notice we've put the Ylm and dYlm tables in device memory for a speed boost
-                alm_grid_real = get_all_alms_w_jax(Yv_i_short, Yv_ip1_short, dYv_i_short, dYv_ip1_short, vs_real)
-                alm_grid_imag = get_all_alms_w_jax(Yv_i_short, Yv_ip1_short, dYv_i_short, dYv_ip1_short, vs_imag)
+                alm_grid_real = get_all_alms_w_jax(Yv_i_short, Yv_ip1_short,
+                                                   dYv_i_short, dYv_ip1_short, vs_real)
+                alm_grid_imag = get_all_alms_w_jax(Yv_i_short, Yv_ip1_short,
+                                                   dYv_i_short, dYv_ip1_short, vs_imag)
                 alm_grid = (np.array(alm_grid_real, dtype='complex128')
                             - 1j *np.array(alm_grid_imag, dtype='complex128'))
             else:
-                # JIT compile the get_alm function and vectorize it
+                # JIT compile the get_alm function
                 get_alm_jitted = nb.jit(nopython=True)(interp.get_alm_np)
                 #
                 alm_grid = np.zeros(len(Yv_i_short[:,0]), dtype='complex128')

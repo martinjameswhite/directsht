@@ -1,21 +1,12 @@
 import numpy as np
-import numba as nb
-
-try:
-    jax_present = True
-    from jax import device_put, vmap, jit
-    import jax.numpy as jnp
-except ImportError:
-    jax_present = False
-    print("JAX not found. Falling back to NumPy.")
-    import numpy as jnp
 
 default_dtype = 'float32'
 def find_transitions(arr):
     '''
-    Find the indices of transitions between different values in an array
-    :param arr: 1D numpy array indicating what bin each element belongs to (must be sorted)
-    :return: 1D numpy array of indices where the value in arr changes (includes 0)
+    Find the indices where the data transitions from one bin/spline to the next
+    :param arr: 1D numpy array indicating what bin/spline each element belongs to (must be sorted)
+    :return: 1D numpy array of indices where the value in arr changes,
+                including a 0 at the beginning and None at the end for indexing convenience
     '''
     # Find the differences between consecutive elements
     differences = np.diff(arr)
@@ -27,60 +18,51 @@ def find_transitions(arr):
     transition_indices = np.append(transition_indices, None)
     return transition_indices
 
-def reshape_array(data, bin_edges, bin_num, bin_len):
+def reshape_phi_array(data, bin_edges, bin_num, bin_len):
     '''
-    Reshape a 1D array into a 2D array to facilitate binning
+    Reshape a 1D array into a 2D array to facilitate binning in computation of v's
     :param data: 1D numpy array of data to be binned
-    :param bin_edges: 1D numpy array of indices where the value in data changes (includes 0)
+    :param bin_edges: 1D numpy array of indices where the values in data go
+            from one bin to the next. Must include 0 and a None at the end.
     :param bin_num: int. Number of bins where there is data
     :param bin_len: int. Maximum number of points in a bin
-    :return: 2D numpy array of reshaped data, zero padded in bins with fewer points
+    :return: 2D numpy array of shape (bin_num, bin_len), zero padded in bins
+            with fewer than bin_len points
     '''
-    data_reshaped = np.zeros((bin_num, bin_len))
+    data_reshaped = np.zeros((bin_num, bin_len), dtype=default_dtype)
     for i in range(bin_num):
         fill_in = data[bin_edges[i]:bin_edges[i+1]]
         data_reshaped[i,:len(fill_in)] = fill_in
     return data_reshaped
 
-def reshape_vs_array(inputs, bin_edges, bin_num, bin_len):
+def reshape_aux_array(inputs, bin_edges, bin_num, bin_len):
     '''
-    #TODO: document better
+    Reshape the four auxiliary 1D arrays into a 2D array shaped in such a way
+    to facilitate binning during computation of the v's.
     :param inputs: list of four 1D numpy array of data to be binned
-    :param bin_edges: 1D numpy array of indices where the value in data changes (includes 0)
+    :param bin_edges:  1D numpy array of indices where the values in data go
+            from one bin to the next. Must include 0 and a None at the end.
     :param bin_num: int. Number of bins where there is data
     :param bin_len: int. Maximum number of points in a bin
-    :return: 2D numpy array of reshaped data, zero padded in bins with fewer points
+    :return: 2D numpy array of shape (4, bin_num, bin_len), zero padded in bins
+            with fewer than bin_len points
     '''
     # Dimensions: vs label, bin_num, bin_len
-    data_reshaped = np.zeros((4,bin_num, bin_len))
+    data_reshaped = np.zeros((4,bin_num, bin_len), dtype=default_dtype)
     for i in range(bin_num):
         for j, input_ in enumerate(inputs):
             fill_in = input_[bin_edges[i]:bin_edges[i+1]]
             data_reshaped[j,i,:len(fill_in)] = fill_in
     return data_reshaped
 
-def insert_next_integer(arr):
-    result = []
-    for num in arr:
-        result.append(num)
-        next_num = num + 1
-        if next_num not in arr:
-            result.append(next_num)
-    return result
-
 def getlm(lmax, szalm, i=None):
-    """Get the l and m from index and lmax. From Healpy
-
-    Parameters
-    ----------
-    lmax : int
-      The maximum l defining the alm layout
-    szalm : int
-      The size of the alm array
-    i : int or None
-      The index for which to compute the l and m.
-      If None, the function return l and m for i=0..Alm.getsize(lmax)
-    """
+    '''
+    Get the l and m from index and lmax. From Healpy.
+    :param lmax: int. The maximum l defining the alm layout
+    :param szalm: int. The size of the alm array
+    :param i: int or None. The index for which to compute the l and m.
+            If None, the function returns l and m for i=0..Alm.getsize(lmax)
+    '''
     if i is None:
         i = np.arange(szalm)
     assert (
