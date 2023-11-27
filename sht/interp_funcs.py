@@ -3,7 +3,7 @@ import numpy as np
 
 try:
     jax_present = True
-    from jax import jit
+    from jax import jit, device_put
     import jax.numpy as jnp
 except ImportError:
     jax_present = False
@@ -13,7 +13,7 @@ except ImportError:
 
 default_dtype = 'float32'
 
-def get_vs(mmax, phi_data_reshaped, reshaped_inputs):
+def get_vs(mmax, phi_data_reshaped, reshaped_inputs, loop_in_JAX=False):
     """
     Wrapper function for get_vs_np and get_vs_jax. Defaults to JAX version when JAX is present.
     :param mmax: int. Maximum m value in the calculation
@@ -22,11 +22,17 @@ def get_vs(mmax, phi_data_reshaped, reshaped_inputs):
     :param reshaped_inputs: 2D numpy array of shape (4, bin_num, bin_len) with zero padding as
             in phi_data_reshaped. The 1st dimension corresponds to the four auxiliary arrays in
             the calculation of the v's.
+    :param loop_in_JAX: bool. Whether to loop over m in JAX or in NumPy. Defaults to False,
+            because JAX doesn't support in-place operations, so it's quite a bit slower
     :return: a tuple of two 3D numpy arrays of shape (mmax+1, 4, bin_num) with the real and
             imaginary parts of the v's at each m.
     """
     if jax_present:
-        return get_vs_jax(mmax, phi_data_reshaped, reshaped_inputs)
+        if loop_in_JAX:
+            return get_vs_jax(mmax, phi_data_reshaped, reshaped_inputs)
+        else:
+            # Run loop in numpy and move to GPU memory at the end
+            return [device_put(vs) for vs in get_vs_np(mmax, phi_data_reshaped, reshaped_inputs)]
     else:
         return get_vs_np(mmax, phi_data_reshaped, reshaped_inputs)
 #@jit
@@ -68,6 +74,7 @@ def get_vs_jax(mmax, phi_data_reshaped, reshaped_inputs):
     vs_i=vs_r.copy()
     for m in range(mmax+1):
         vs_r_at_m, vs_i_at_m = get_vs_at_m(m, phi_data_reshaped, reshaped_inputs)
+        #TODO: Doing this with JAX is very inefficient!
         vs_r = vs_r.at[m,:,:].set(vs_r_at_m)
         vs_i = vs_i.at[m,:,:].set(vs_i_at_m)
     return vs_r, vs_i
