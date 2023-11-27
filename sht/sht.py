@@ -148,23 +148,23 @@ class DirectSHT:
             t = x_data_sorted - x_samples[spline_idx]
             #
             # Find the number of different bins that are populated
-            occupied_bins = np.unique(spline_idx)
+            occupied_bins = utils.insert_next_integer(np.unique(spline_idx))
             bin_num = len(occupied_bins)
             # Then, we find the maximum number of points in a bin
             bin_len = mode(spline_idx).count
-            # Find the indices of transitions between bins
-            transitions = utils.find_transitions(spline_idx)
+            # Find the indices of edges between bins
+            bin_edges = utils.find_bin_edges(spline_idx)
             # Reshape the inputs into a 2D array for fast binning
             reshaped_inputs = utils.reshape_vs_array([w_i_sorted * input_ for input_ in
                                                       [(2*t+1)*(1-t)**2,t*(1-t)**2,t**2*(3-2*t)
-                                                          ,t**2*(t-1)]],transitions, bin_num,bin_len)
+                                                          ,t**2*(t-1)]],bin_edges, bin_num,bin_len)
 
             # Make a mask to discard spurious zeros
-            mask = utils.reshape_array(np.ones_like(phi_data_sorted), transitions, bin_num, bin_len)
+            mask = utils.reshape_array(np.ones_like(phi_data_sorted), bin_edges, bin_num, bin_len)
             # Mask and put in GPU memory
             reshaped_inputs = device_put(mask * reshaped_inputs)
             reshaped_phi_data = device_put(mask * utils.reshape_array(phi_data_sorted,
-                                                                      transitions, bin_num, bin_len))
+                                                                      bin_edges, bin_num, bin_len))
 
             # Query only theta bins that have data
             Yv_short = self.Yv[:, occupied_bins]
@@ -200,7 +200,7 @@ class DirectSHT:
                             - 1j *np.array(alm_grid_imag, dtype='complex128'))
             else:
                 # JIT compile the get_alm function and vectorize it
-                get_alm_jitted = nb.jit(nopython=True)(interp.get_alm_np)
+                get_alm_jitted = interp.get_alm_np#nb.jit(nopython=True)(interp.get_alm_np)
                 #
                 alm_grid = np.zeros(len(Yv_short[:,0]), dtype='complex128')
                 vs_tot = vs_real - 1j * vs_imag
