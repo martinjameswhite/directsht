@@ -1,75 +1,68 @@
 import numpy as np
-import numba as nb
-
-try:
-    jax_present = True
-    from jax import device_put, vmap, jit
-    import jax.numpy as jnp
-except ImportError:
-    jax_present = False
-    print("JAX not found. Falling back to NumPy.")
-    import numpy as jnp
 
 default_dtype = 'float32'
-@nb.njit(parallel=True)
-def bin_data(data, bin_indices, Nbins):
+def find_transitions(arr):
     '''
-    Bin data into Nbins bins
-    :param data: 1D np array of data to bin
-    :param bin_indices: 1D np array with the bin index for each data point
-    :param Nbins: number of bins
+    Find the indices where the data transitions from one bin/spline to the next
+    :param arr: 1D numpy array indicating what bin/spline each element belongs to (must be sorted)
+    :return: 1D numpy array of indices where the value in arr changes,
+                including a 0 at the beginning and None at the end for indexing convenience
     '''
-    bin_sums = np.zeros(Nbins, dtype=default_dtype)
-    for i in nb.prange(len(data)):
-        bin_sums[bin_indices[i]] += data[i]
-    return bin_sums
+    # Find the differences between consecutive elements
+    differences = np.diff(arr)
+    # Find the indices where differences are non-zero
+    transition_indices = np.nonzero(differences)[0] + 1
+    # Prepend beginning index
+    transition_indices = np.insert(transition_indices, 0, 0, axis=0)
+    # For indexing convenience, append None to the end
+    transition_indices = np.append(transition_indices, None)
+    return transition_indices
 
-def get_phi_dep(phi_data_sorted, m, which_part):
+def reshape_phi_array(data, bin_edges, bin_num, bin_len):
     '''
-    Calculate the real or imaginary part of the phi dependence of the Ylm's
-    :param phi_data_sorted: a 1d numpy array of phi data points (same length as theta_data_sorted)
-    :param m: the m index of the Ylm
-    :param which_part: 'cos' or 'sin' for the real or imaginary part of the phi dependence
-    :return: a 1D numpy array of the real or imaginary part of the phi dependence of the Ylm's at each phi data point
+    Reshape a 1D array into a 2D array to facilitate binning in computation of v's
+    :param data: 1D numpy array of data to be binned
+    :param bin_edges: 1D numpy array of indices where the values in data go
+            from one bin to the next. Must include 0 and a None at the end.
+    :param bin_num: int. Number of bins where there is data
+    :param bin_len: int. Maximum number of points in a bin
+    :return: 2D numpy array of shape (bin_num, bin_len), zero padded in bins
+            with fewer than bin_len points
     '''
-    fn = function_map.get(which_part)
-    # JIT compile the function and vectorize it
-    if jax_present:
-        vect_fn = vmap(jit(fn), in_axes=(0, None))
-        out = np.array(vect_fn(phi_data_sorted, m), dtype=default_dtype)
-    else:
-        out = fn(phi_data_sorted, m)
-    return out
+    data_reshaped = np.zeros((bin_num, bin_len), dtype=default_dtype)
+    for i in range(bin_num):
+        fill_in = data[bin_edges[i]:bin_edges[i+1]]
+        data_reshaped[i,:len(fill_in)] = fill_in
+    return data_reshaped
 
-@nb.njit(parallel=True)
-def cosmphi_np(phi, m):
-    return np.cos(m * phi)
-@nb.njit(parallel=True)
-def sinmphi_np(phi, m):
-    return np.sin(m * phi)
-def cosmphi_jax(phi, m):
-    return jnp.cos(m * phi)
-def sinmphi_jax(phi, m):
-    return jnp.sin(m * phi)
+def reshape_aux_array(inputs, bin_edges, bin_num, bin_len):
+    '''
+    Reshape the four auxiliary 1D arrays into a 2D array shaped in such a way
+    to facilitate binning during computation of the v's.
+    :param inputs: list of four 1D numpy array of data to be binned
+    :param bin_edges:  1D numpy array of indices where the values in data go
+            from one bin to the next. Must include 0 and a None at the end.
+    :param bin_num: int. Number of bins where there is data
+    :param bin_len: int. Maximum number of points in a bin
+    :return: 2D numpy array of shape (4, bin_num, bin_len), zero padded in bins
+            with fewer than bin_len points
+    '''
+    # Dimensions: vs label, bin_num, bin_len
+    data_reshaped = np.zeros((4,bin_num, bin_len), dtype=default_dtype)
+    for i in range(bin_num):
+        for j, input_ in enumerate(inputs):
+            fill_in = input_[bin_edges[i]:bin_edges[i+1]]
+            data_reshaped[j,i,:len(fill_in)] = fill_in
+    return data_reshaped
 
-# Map functions based on which_part
-function_map = {
-    'cos': cosmphi_jax if jax_present else cosmphi_np,
-    'sin': sinmphi_jax if jax_present else sinmphi_np,
-}
 def getlm(lmax, szalm, i=None):
-    """Get the l and m from index and lmax. From Healpy
-
-    Parameters
-    ----------
-    lmax : int
-      The maximum l defining the alm layout
-    szalm : int
-      The size of the alm array
-    i : int or None
-      The index for which to compute the l and m.
-      If None, the function return l and m for i=0..Alm.getsize(lmax)
-    """
+    '''
+    Get the l and m from index and lmax. From Healpy.
+    :param lmax: int. The maximum l defining the alm layout
+    :param szalm: int. The size of the alm array
+    :param i: int or None. The index for which to compute the l and m.
+            If None, the function returns l and m for i=0..Alm.getsize(lmax)
+    '''
     if i is None:
         i = np.arange(szalm)
     assert (
