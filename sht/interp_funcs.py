@@ -11,7 +11,7 @@ except ImportError:
     import numpy as jnp
     jit = lambda x: x  # Define a dummy jit decorator for fallback
 
-default_dtype = 'float32'
+default_dtype = None # Replace if you want to use a different dtype from the env default
 
 def get_vs(mmax, phi_data_reshaped, reshaped_inputs, loop_in_JAX=False):
     """

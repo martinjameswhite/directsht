@@ -1,6 +1,7 @@
 import numpy as np
 
-default_dtype = 'float32'
+default_dtype = None # Replace if you want to use a different dtype from the env default
+
 def find_transitions(arr):
     '''
     Find the indices where the data transitions from one bin/spline to the next
