@@ -5,8 +5,8 @@
 
 
 
-int	indx(int ell, int m, int Nl) {
-int	ii;
+long	indx(int ell, int m, int Nl) {
+long	ii;
   ii = (m*(2*Nl-1-m))/2 + ell;
   return(ii);
 }
@@ -16,7 +16,8 @@ int	ii;
 
 int	make_table(int Nl, int Nx, double xmax, double Yv[], double Yd[]) {
 /* Makes the function value and derivative tables: Yv, Yd. */
-int	ell,m,ix,ii,i0,i1,i2;
+int     ell,m,ix;
+long    ii,i0,i1,i2;
 double	xx,omx2,dx,fact1,fact2;
   dx = xmax/(Nx-1.0);
   /* First do Legendre polynomials. */
@@ -125,7 +126,8 @@ int	do_transform(int Nl, int Nx, double xmax, double Yv[], double Yd[],
 /* Does the direct SHT, filling in the cosine and sine arrays.  This
    version keeps memory usage to a minimum at the expense of redoing
    the interpolation in x for each (ell,m), which is slow. */
-int	ell,m,ii,ix,offset,i0,i1;
+int     ell,m,ix;
+long    offset,ii,i0,i1;
 double	xx,ax,dx,sc,ss,yv;
 double	tt,t1,t2,s0,s1,s2,s3;
   /* Zero the carr and sarr -- not really necessary. */
@@ -173,22 +175,24 @@ double	tt,t1,t2,s0,s1,s2,s3;
 /* The following code is currently both slow and incorrect. */
 
 int	do_transform(int Nl, int Nx, double xmax, double Yv[], double Yd[],
-                     int Np, double cost[], double phi[], double wt[],
-                     double carr[], double sarr[]) {
+                 int Np, double cost[], double phi[], double wt[],
+                 double carr[], double sarr[]) {
 /* Does the direct SHT, filling in the cosine and sine arrays.  This
    version is faster than the above, but uses more memory.  The objects
    must also be sorted in order of increasing cost, and it is assumed
    the phase factor for cost<0 will be applied externally. */
-int     ell,m,ii,jj,ix,i0,i1,jmin,jmax;
-int     ithread,nthread,Nlm;
+int     ell,m,ix;
+int     ithread,nthread;
+long    ii,jj,i0,i1,jmin,jmax,Nlm;
 double  xx,ax,dx;
 double  tt,t1,t2,s0,s1,s2,s3;
 double  *cj,*sj,*csum,*ssum;
   /* Make storage for the intermediate "cj" arrays. */
   nthread = omp_get_max_threads();
-  cj = malloc(4*Nl*Nx*nthread*sizeof(double));
+  ii = 4L*Nl*Nx;
+  cj = malloc(ii*nthread*sizeof(double));
   if (cj==NULL) {perror("malloc");return(1);}
-  sj = malloc(4*Nl*Nx*nthread*sizeof(double));
+  sj = malloc(ii*nthread*sizeof(double));
   if (sj==NULL) {perror("malloc");return(1);}
   /* and zero them. */
   for (ii=0; ii<4*Nl*Nx*nthread; ii++) cj[ii]=sj[ii]=0;
@@ -242,7 +246,7 @@ double  *cj,*sj,*csum,*ssum;
     }
   }
   /* Now do the sums over x-bins. */
-  Nlm = (Nl*(Nl+1))/2;
+  Nlm  = (Nl*(Nl+1))/2;
   csum = malloc(Nlm*nthread*sizeof(double));
   if (csum==NULL) {perror("malloc");return(1);}
   ssum = malloc(Nlm*nthread*sizeof(double));
