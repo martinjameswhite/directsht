@@ -7,7 +7,8 @@
 
 long	indx(int ell, int m, int Nl) {
 long	ii;
-  ii = (m*(2*Nl-1-m))/2 + ell;
+  ii = 2*Nl-1-m;
+  ii = (m*ii)/2 + ell;
   return(ii);
 }
 
