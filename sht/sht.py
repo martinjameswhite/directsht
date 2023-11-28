@@ -104,6 +104,9 @@ class DirectSHT:
         assert np.all( (theta>=0) & (theta>np.arccos(self.xmax)) & (theta<np.arccos(-self.xmax))),\
                "theta must be in [ACos[xmax],ACos[-xmax])."
 
+        x_samples = self.x
+        # TODO: this way of calculating dx assumes the points are evenly spaced in x
+        dx = x_samples[1] - x_samples[0]
         # Multiply the weights by a regularization factor to avoid numerical
         # under/overflow
         wt*= reg_factor
@@ -143,14 +146,13 @@ class DirectSHT:
             sorted_idx = np.argsort(x)
             x_data_sorted = x[sorted_idx]; w_i_sorted = wt[idx][sorted_idx];
             phi_data_sorted = phi[idx][sorted_idx]
-            x_samples = self.x
             #
             t1 = time.time()
             if verbose: print("Sorting took ",t1-t0," seconds.",flush=True)
             #
             # Find which spline region each point falls into
             spline_idx = np.digitize(x_data_sorted, x_samples) - 1
-            t = x_data_sorted - x_samples[spline_idx]
+            t = (x_data_sorted - x_samples[spline_idx]) / dx
             #
             # Find which bins (bounded by the elements of x_samples) are populated
             occupied_bins = np.unique(spline_idx)
@@ -172,9 +174,9 @@ class DirectSHT:
                                                           ,t**2*(t-1)]], transitions, bin_num, bin_len)
             reshaped_inputs = device_put(mask * reshaped_inputs)
 
-            # Query only theta bins that have data
+            # Query only theta bins that have data. While we're at it, scale derivatives by dx
             Yv_i_short = self.Yv[:, occupied_bins]; Yv_ip1_short = self.Yv[:, occupied_bins+1]
-            dYv_i_short = self.Yd[:, occupied_bins]; dYv_ip1_short = self.Yd[:, occupied_bins+1]
+            dYv_i_short = dx*self.Yd[:, occupied_bins]; dYv_ip1_short = dx*self.Yd[:, occupied_bins+1]
             # If JAX is available, move big arrays to GPU
             Yv_i_short = device_put(Yv_i_short); Yv_ip1_short = device_put(Yv_ip1_short)
             dYv_i_short = device_put(dYv_i_short); dYv_ip1_short = device_put(dYv_ip1_short)
