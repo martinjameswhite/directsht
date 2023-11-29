@@ -158,7 +158,7 @@ class DirectSHT:
             occupied_bins = np.unique(spline_idx)
             bin_num = len(occupied_bins)
             # Then, we find the maximum number of points in a bin
-            bin_len = mode(spline_idx).count
+            bin_len = mode(spline_idx, keepdims=False).count
             # Find the data indices where transitions btw splines/bins happen
             transitions = utils.find_transitions(spline_idx)
             # Reshape the inputs into a 2D array for fast binning during
