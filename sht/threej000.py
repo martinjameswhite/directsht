@@ -5,24 +5,6 @@ import time
 import numba
 from sympy.physics.wigner import wigner_3j
 
-#
-#
-# This code should be modified to generate an astropy
-# table of the Wigner-3j coefficients, and save it.
-#
-# We can "order" an input list of ells via:
-# L  = l1+l2+l3
-# j1 = max([l1,l2,l3])
-# j3 = min([l1,l2,l3])
-# j2 = L-j1-j2
-# then the index is
-# ii=(j1*(j1+1)*(j1+2))//6+(j2*(j2+1))//2+j3
-#
-
-#from sympy.physics.wigner import wigner_3j
-
-
-
 
 @numba.jit(nopython=True)
 def threej000(ell1,ell2,ell3,store):
@@ -55,38 +37,61 @@ def threej000(ell1,ell2,ell3,store):
     #
 
 
-def do_test(Nl):
-    """A loop to do timing tests on."""
-    store = np.zeros((Nl*(Nl+1)*(Nl+2))//6,dtype='float64') + 1e42
-    for j1 in range(Nl):
-        for j2 in range(j1+1):
-            for j3 in range(j2+1):
-                #w3j = float(wigner_3j(j1,j2,j3,0,0,0))
-                m3j = threej000(j1,j2,j3,store)
-                #J   = j1+j2+j3
-                #if J%2==0:
-                #    err = (m3j-w3j)/(np.abs(w3j)+0.1)
-                #    print("{:2d} {:2d} {:2d} ".format(j1,j2,j3)+\
-                #          "{:10.5} {:10.5f} {:10.5f}".format(w3j,m3j,err))
-    return(store)
+class Wigner3j:
+    def __init__(self, Nl):
+        """
+        Class to compute and save/load Wigner 3j symbols.
+        :param Nl: int. (One plus) the maximum l for which to compute the 3j's
+        """
+        self.Nl = Nl
+        self.store = self.get_3js()
 
+    def __call__(self, l1, l2, l3):
+        """
+        Compute the Wigner 3j symbol for integer l's and m1=m2=m3=0.
+        :param l1: int. l1
+        :param l2: int. l2
+        :param l3: int. l3
+        :return: float. The Wigner 3j symbol
+        """
+        return self.store[self.get_index(l1, l2, l3)]
 
-# Note we should really store (j1,j2,j3) as:
-# index = j1(j1+1)(j1+2)/6 + j2(j2+1)/2 + j3
+    def get_index(self, l1, l2, l3):
+        """
+        Get the index of the Wigner 3j symbol in the table.
+        :param l1: int. l1
+        :param l2: int. l2
+        :param l3: int. l3
+        :return: int. The index of the Wigner 3j symbol in the table.
+        """
+        # Order ell1, ell2 and ell3 such that j1>=j2>=j3.
+        ells = [l1, l2, l3]
+        j1 = max(ells)
+        j3 = min(ells)
+        j2 = l1 + l2 + l3 - j1 - j3
+        # Work out the index.
+        return  (j1 * (j1 + 1) * (j1 + 2)) // 6 + (j2 * (j2 + 1)) // 2 + j3
 
+    def get_3js(self):
+        """A loop to do timing tests on."""
+        store = np.zeros((self.Nl*(self.Nl+1)*(self.Nl+2))//6,dtype='float64')+1e42
+        for j1 in range(Nl):
+            for j2 in range(j1 + 1):
+                for j3 in range(j2 + 1):
+                    threej000(j1, j2, j3, store)
+        return(store)
 
 if __name__=="__main__":
-    for Nl in [200]:
+    for Nl in [1000]:
         t0 = time.time()
-        output = do_test(Nl)
+        temp_3js = Wigner3j(Nl)
         print("Nl=",Nl," took ",time.time()-t0," seconds.")
 
         # Compare to sympy
         l1=Nl-1
         l2=Nl-2
         l3=1
-        ii= (l1*(l1+1)*(l1+2))//6 + (l2*(l2+1))//2 + l3
-        our_result = output[ii]
+        our_result = temp_3js(l1,l2,l3)
         sympy_result = wigner_3j(l1,l2,l3,0,0,0).n(32)
         print('Testing l1={}, l2={}, l3={}'.format(l1,l2,l3))
         print('Fractional difference with sympy: ',
