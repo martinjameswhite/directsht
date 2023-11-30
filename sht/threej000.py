@@ -37,7 +37,12 @@ def threej000(j1,j2,j3,store):
             num = (J-2*j2-1)*(J-2*j3+2)
             den = (J-2*j2  )*(J-2*j3+1)
             fac = np.sqrt(float(num)/float(den))
-            return(fac*threej000(j1,j2+1,j3-1,store))
+            res = fac*threej000(j1,j2+1,j3-1,store)
+            if (j1 < store.shape[0]) & \
+                    (j2 < store.shape[1]) & \
+                    (j3 < store.shape[2]):
+                store[j1,j2,j3] = res
+            return(res)
     elif (j1>=j2)&(j1>=j3)&(j2< j3):
         return(threej000(j1,j3,j2,store))	# No minus sign since J even.
     elif (j1>=j2)&(j1< j3)&(j2< j3):
@@ -80,7 +85,7 @@ def do_test(Nl):
 
 
 if __name__=="__main__":
-    for Nl in [50,100,250,500]:
+    for Nl in [200]:
         t0 = time.time()
         output = do_test(Nl)
         print("Nl=",Nl," took ",time.time()-t0," seconds.")
