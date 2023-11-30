@@ -10,8 +10,6 @@ from sympy.physics.wigner import wigner_3j
 def threej000(ell1,ell2,ell3,store):
     """Returns the Wigner 3j symbol for integer ell's and m1=m2=m3=0."""
     J = ell1+ell2+ell3
-    if (J%2>0):
-        return(0.0)
     # Order ell1, ell2 and ell3 such that j1>=j2>=j3.
     ells = [ell1,ell2,ell3]
     j1   = max(ells)
@@ -22,6 +20,11 @@ def threej000(ell1,ell2,ell3,store):
     if ii<store.size:
         if store[ii]<1e39:
             return(store[ii])
+        elif (J%2>0):
+            store[ii] = 0.0
+            return(0.0)
+    if (J%2>0):
+        return(0.0)
     if (j1==j2)&(j3==0):
         return( (-1.)**j1/np.sqrt(2*j1+1.0) )
     elif (j1!=j2)&(j3==0):
