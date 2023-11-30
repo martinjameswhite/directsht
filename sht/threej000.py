@@ -15,20 +15,17 @@ from sympy.physics.wigner import wigner_3j
 #from sympy.physics.wigner import wigner_3j
 
 
-# For timing I'm remaking this array each time
-# (see __main__ below).
-# It should all be in some class and set up like
-# this when the class is instantiated.
-Nlmax = 512
-###store = np.zeros( (Nlmax,Nlmax,Nlmax) ) + 1e40
+
 
 @numba.jit(nopython=True)
-def threej000(j1,j2,j3, store):
+def threej000(j1,j2,j3,store):
     """Returns the Wigner 3j symbol for integer j's and m1=m2=m3=0."""
     J = j1+j2+j3
     if (J%2>0):
         return(0)
-    if (j1<Nlmax)&(j2<Nlmax)&(j3<Nlmax):
+    if (j1<store.shape[0])&\
+       (j2<store.shape[1])&\
+       (j3<store.shape[2]):
         if store[j1,j2,j3]<1e39:
             return(store[j1,j2,j3])
     if (j1>=j2)&(j1>=j3)&(j2>=j3):
@@ -40,7 +37,7 @@ def threej000(j1,j2,j3, store):
             num = (J-2*j2-1)*(J-2*j3+2)
             den = (J-2*j2  )*(J-2*j3+1)
             fac = np.sqrt(float(num)/float(den))
-            return(fac*threej000(j1,j2+1,j3-1, store))
+            return(fac*threej000(j1,j2+1,j3-1,store))
     elif (j1>=j2)&(j1>=j3)&(j2< j3):
         return(threej000(j1,j3,j2,store))	# No minus sign since J even.
     elif (j1>=j2)&(j1< j3)&(j2< j3):
@@ -58,12 +55,12 @@ def threej000(j1,j2,j3, store):
 
 def do_test(Nl):
     """A loop to do timing tests on."""
-    store = np.zeros((Nl, Nl, Nl)) + 1e40
+    store = np.zeros((Nl,Nl,Nl)) + 1e40
     for j1 in range(Nl):
         for j2 in range(j1+1):
             for j3 in range(j2+1):
                 #w3j = float(wigner_3j(j1,j2,j3,0,0,0))
-                m3j = threej000(j1,j2,j3, store)
+                m3j = threej000(j1,j2,j3,store)
                 #J   = j1+j2+j3
                 #if J%2==0:
                 #    err = (m3j-w3j)/(np.abs(w3j)+0.1)
@@ -75,7 +72,7 @@ def do_test(Nl):
                 store[j1,j3,j2] = m3j
                 store[j2,j1,j3] = m3j
                 store[j3,j2,j1] = m3j
-    return store
+    return(store)
 
 
 # Note we should really store (j1,j2,j3) as:
