@@ -28,8 +28,9 @@ def threej000(j1,j2,j3, store):
     J = j1+j2+j3
     if (J%2>0):
         return(0)
-    if store[j1,j2,j3]<1e39:
-        return(store[j1,j2,j3])
+    if (j1<Nlmax)&(j2<Nlmax)&(j3<Nlmax):
+        if store[j1,j2,j3]<1e39:
+            return(store[j1,j2,j3])
     if (j1>=j2)&(j1>=j3)&(j2>=j3):
         if (j1==j2)&(j3==0):
             return( (-1)**j1/np.sqrt(2*j1+1.0) )
