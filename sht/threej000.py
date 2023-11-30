@@ -10,6 +10,13 @@ from sympy.physics.wigner import wigner_3j
 # This code should be modified to generate an astropy
 # table of the Wigner-3j coefficients, and save it.
 #
+# We can "order" an input list of ells via:
+# L  = l1+l2+l3
+# j1 = max([l1,l2,l3])
+# j3 = min([l1,l2,l3])
+# j2 = L-j1-j2
+# then the index is
+# ii=(j1*(j1+1)*(j1+2))//6+(j2*(j2+1))//2+j3
 #
 
 #from sympy.physics.wigner import wigner_3j
