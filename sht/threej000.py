@@ -75,7 +75,7 @@ class Wigner3j:
     def get_3js(self):
         """A loop to do timing tests on."""
         store = np.zeros((self.Nl*(self.Nl+1)*(self.Nl+2))//6,dtype='float64')+1e42
-        for j1 in range(Nl):
+        for j1 in range(self.Nl):
             for j2 in range(j1 + 1):
                 for j3 in range(j2 + 1):
                     threej000(j1, j2, j3, store)
