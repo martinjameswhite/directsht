@@ -20,14 +20,18 @@ def threej000(ell1,ell2,ell3,store):
     if ii<store.size:
         if store[ii]<1e39:
             return(store[ii])
-        elif (J%2>0):
-            store[ii] = 0.0
-            return(0.0)
     if (J%2>0):
+        if (ii<store.size):
+            store[ii] = 0.0
         return(0.0)
     if (j1==j2)&(j3==0):
-        return( (-1.)**j1/np.sqrt(2*j1+1.0) )
+        res = (-1.) ** j1 / np.sqrt(2 * j1 + 1.0)
+        if (ii<store.size):
+            store[ii] = res
+        return( res )
     elif (j1!=j2)&(j3==0):
+        if (ii<store.size):
+            store[ii] = 0.0
         return(0.0)
     else:
         num = (J-2*j2-1)*(J-2*j3+2)
