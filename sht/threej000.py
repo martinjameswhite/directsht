@@ -25,49 +25,39 @@ from sympy.physics.wigner import wigner_3j
 
 
 @numba.jit(nopython=True)
-def threej000(j1,j2,j3,store):
-    """Returns the Wigner 3j symbol for integer j's and m1=m2=m3=0."""
-    J = j1+j2+j3
+def threej000(ell1,ell2,ell3,store):
+    """Returns the Wigner 3j symbol for integer ell's and m1=m2=m3=0."""
+    J = ell1+ell2+ell3
     if (J%2>0):
-        return(0)
-    if (j1<store.shape[0])&\
-       (j2<store.shape[1])&\
-       (j3<store.shape[2]):
-        if store[j1,j2,j3]<1e39:
-            return(store[j1,j2,j3])
-    if (j1>=j2)&(j1>=j3)&(j2>=j3):
-        if (j1==j2)&(j3==0):
-            return( (-1)**j1/np.sqrt(2*j1+1.0) )
-        elif (j1!=j2)&(j3==0):
-            return( 0.0 )
-        else:
-            num = (J-2*j2-1)*(J-2*j3+2)
-            den = (J-2*j2  )*(J-2*j3+1)
-            fac = np.sqrt(float(num)/float(den))
-            res = fac*threej000(j1,j2+1,j3-1,store)
-            if (j1 < store.shape[0]) & \
-                    (j2 < store.shape[1]) & \
-                    (j3 < store.shape[2]):
-                store[j1,j2,j3] = res
-            return(res)
-    elif (j1>=j2)&(j1>=j3)&(j2< j3):
-        return(threej000(j1,j3,j2,store))	# No minus sign since J even.
-    elif (j1>=j2)&(j1< j3)&(j2< j3):
-        return(threej000(j3,j1,j2,store))
-    elif (j1< j2)&(j1>=j3)&(j2>=j3):
-        return(threej000(j2,j1,j3,store))
-    elif (j1< j2)&(j1< j3)&(j2>=j3):
-        return(threej000(j2,j3,j1,store))
-    elif (j1< j2)&(j1< j3)&(j2< j3):
-        return(threej000(j3,j2,j1,store))
+        return(0.0)
+    # Order ell1, ell2 and ell3 such that j1>=j2>=j3.
+    ells = [ell1,ell2,ell3]
+    j1   = max(ells)
+    j3   = min(ells)
+    j2   = J-j1-j3
+    # Work out the index.
+    ii   = (j1*(j1+1)*(j1+2))//6 + (j2*(j2+1))//2 + j3
+    if ii<store.size:
+        if store[ii]<1e39:
+            return(store[ii])
+    if (j1==j2)&(j3==0):
+        return( (-1.)**j1/np.sqrt(2*j1+1.0) )
+    elif (j1!=j2)&(j3==0):
+        return(0.0)
     else:
-        raise RuntimeError
+        num = (J-2*j2-1)*(J-2*j3+2)
+        den = (J-2*j2  )*(J-2*j3+1)
+        fac = np.sqrt(float(num)/float(den))
+        res = fac*threej000(j1,j2+1,j3-1,store)
+        if (ii<store.size):
+            store[ii] = res
+        return(res)
     #
 
 
 def do_test(Nl):
     """A loop to do timing tests on."""
-    store = np.zeros((Nl,Nl,Nl)) + 1e40
+    store = np.zeros((Nl*(Nl+1)*(Nl+2))//6,dtype='float64') + 1e42
     for j1 in range(Nl):
         for j2 in range(j1+1):
             for j3 in range(j2+1):
@@ -78,12 +68,6 @@ def do_test(Nl):
                 #    err = (m3j-w3j)/(np.abs(w3j)+0.1)
                 #    print("{:2d} {:2d} {:2d} ".format(j1,j2,j3)+\
                 #          "{:10.5} {:10.5f} {:10.5f}".format(w3j,m3j,err))
-                store[j1,j2,j3] = m3j
-                store[j2,j3,j1] = m3j
-                store[j3,j1,j2] = m3j
-                store[j1,j3,j2] = m3j
-                store[j2,j1,j3] = m3j
-                store[j3,j2,j1] = m3j
     return(store)
 
 
@@ -101,7 +85,8 @@ if __name__=="__main__":
         l1=Nl-1
         l2=Nl-2
         l3=1
-        our_result = output[l1,l2,l3]
+        ii= (l1*(l1+1)*(l1+2))//6 + (l2*(l2+1))//2 + l3
+        our_result = output[ii]
         sympy_result = wigner_3j(l1,l2,l3,0,0,0).n(32)
         print('Testing l1={}, l2={}, l3={}'.format(l1,l2,l3))
         print('Fractional difference with sympy: ',
