@@ -11,23 +11,24 @@ from  threej000 import Wigner3j
 from scipy.interpolate import interp1d
 
 class MaskDeconvolution:
-    def __init__(self, lmax, C_l, N_l, W_l, W_l_ells, lperBin=2 ** 4, verbose=True):
+    def __init__(self, lmax, W_l, W_l_ells, verbose=True):
         """
-        Class to deconvolve the mode-coupling of pseudo-Cls
+        Class to deconvolve the mode-coupling of pseudo-Cls.
+
+        It computes the necessary Wigner 3j symbols and mode-coupling matrix on
+        initialization so that they do not have to be recomputed on successive calls
+        to mode-decouple the pseudo-Cls of noise-debiased bandpowers.
+
         :param lmax: int. Maximum multipole to compute the mode-coupling matrix for.
-        :param C_l: 1D numpy array. Per-ell angular power spectrum of the signal.
-        :param N_l: 1D numpy array. Per-ell angular power spectrum of the noise.
         :param W_l: 1D numpy array. Window function.
         :param W_l_ells: 1D numpy array. Ells at which the window function is provided.
                The maximum ell must be >= than 2*lmax for deconvolution to work.
-        :param lperBin: int. Number of ells per bin.
         :param verbose: bool. Whether to print out information about progress
         """
-        assert ((lmax+1) % lperBin == 0), "lmax+1 must be a multiple of lperBin"
         assert (W_l_ells[-1] >= 2*lmax), "W_l must be provided up to at least 2*lmax"
         self.lmax = lmax
-        self.lperBin = lperBin
 
+        # Precompute the expensive stuff
         if verbose:
             print("Precomputing Wigner 3j symbols...")
         # Precompute the required Wigner 3js
@@ -38,17 +39,29 @@ class MaskDeconvolution:
             print("Computing the mode-coupling matrix...")
         # Compute the mode-coupling matrix
         self.Mll = self.get_M()
-        if verbose:
-            print("Binning, inverting and decoupling...")
+
+    def __call__(self, C_l, N_l, lperBin=2 ** 4):
+        """
+        Compute the noise-debiased and mode-decoupled bandpowers given some binning scheme.
+        :param C_l: 1D numpy array. Per-ell angular power spectrum of the signal.
+        :param N_l: 1D numpy array. Per-ell angular power spectrum of the noise.
+        :param lperBin: int. Number of ells per bin.
+        :return: tuple of (1D numpy array, 1D numpy array). The first array contains
+                    the ells at which the bandpowers are computed. The second array
+                    contains the noise-debiased and mode-decoupled bandpowers.
+        """
+        assert ((self.lmax+1) % lperBin == 0), "lmax+1 must be a multiple of lperBin"
+        self.lperBin = lperBin
         # Bin the matrix
         self.init_binning()
-        self.Mbb = self.bin_matrix(self.Mll)
+        Mbb = self.bin_matrix(self.Mll)
         # Invert the binned matrix
-        self.Mbb_inv = np.linalg.inv(self.Mbb)
+        Mbb_inv = np.linalg.inv(Mbb)
         # Bin the Cls and Nls
-        self.Cb = self.bin_Cls(C_l); self.Nb = self.bin_Cls(N_l)
+        Cb = self.bin_Cls(C_l); Nb = self.bin_Cls(N_l)
         # Mode-decouple the noise-debiased bandpowers
-        self.Cb_decoupled = self.decouple_Cls(self.Mbb_inv, self.Cb, self.Nb)
+        Cb_decoupled = self.decouple_Cls(Mbb_inv, Cb, Nb)
+        return (self.binned_ells, Cb_decoupled)
 
     def W(self, l, debug=False):
         """
