@@ -43,13 +43,18 @@ class MaskDeconvolution:
     def __call__(self, C_l, N_l, lperBin=2 ** 4):
         """
         Compute the noise-debiased and mode-decoupled bandpowers given some binning scheme.
-        :param C_l: 1D numpy array. Per-ell angular power spectrum of the signal.
-        :param N_l: 1D numpy array. Per-ell angular power spectrum of the noise.
+        :param C_l: 1D numpy array of length self.lmax + 1.
+                    Per-ell angular power spectrum of the signal.
+        :param N_l: 1D numpy array of length self.lmax + 1.
+                    Per-ell angular power spectrum of the noise.
         :param lperBin: int. Number of ells per bin.
         :return: tuple of (1D numpy array, 1D numpy array). The first array contains
                     the ells at which the bandpowers are computed. The second array
                     contains the noise-debiased and mode-decoupled bandpowers.
         """
+        assert (len(C_l) == self.lmax + 1), ("C_l must be provided up to the lmax"
+                                             " with which the class was initialized")
+        assert (len(C_l)==len(N_l)), "C_l and N_l must have the same length"
         assert ((self.lmax+1) % lperBin == 0), "lmax+1 must be a multiple of lperBin"
         self.lperBin = lperBin
         # Bin the matrix
@@ -100,14 +105,17 @@ class MaskDeconvolution:
     def init_binning(self):
         """
         Set up the binning matrix to combine Cls and mode-coupling
-        matrix into coarses ell bins.
+        matrix into coarser ell bins.
         """
         self.bins = np.zeros(((self.lmax+1) // self.lperBin, self.lmax + 1))
+        self.bins_no_weight = self.bins.copy()
         for i in range(0, self.lmax + 1, self.lperBin):
             self.bins[i // self.lperBin, i:i + self.lperBin] = 1 / float(self.lperBin)
+            self.bins_no_weight[i // self.lperBin, i:i + self.lperBin] = 1
         # Also set it such that we drop the ell=0 bin
         # when we do our average(s).
         self.bins[0, 0] = 0.0
+        self.bins_no_weight[0, 0] = 0.0
         self.binned_ells = np.dot(self.bins, np.arange(self.lmax + 1))
 
     def bin_matrix(self, M):
@@ -118,7 +126,7 @@ class MaskDeconvolution:
         :return: 2D array of shape (lmax+1//lperBin,lmax+1//lperBin)
                   containing the binned mode-coupling matrix
         """
-        return np.matmul(np.matmul(self.bins, M), self.bins.T)
+        return np.matmul(np.matmul(self.bins, M), self.bins_no_weight.T)
 
     def bin_Cls(self, Cl):
         """
