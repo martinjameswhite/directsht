@@ -16,7 +16,8 @@ from   sht import DirectSHT
 
 
 if __name__=="__main__":
-    # Compare Ylm.
+    # Compare Ylm against the SciPy library version.
+    # Generate a grid of Ylm using our class.
     Nl,Nx = 500,1024
     now   = time.time()
     sht   = DirectSHT(Nl,Nx)
@@ -34,10 +35,12 @@ if __name__=="__main__":
             for i,x in enumerate(sht.x):
                 theta     = np.arccos(x)
                 Ylb[ii,i] = np.real( sph_harm(m,ell,0,theta) )
-    # Just cross-check some Ylm values for sanity.
-    print("Check Ylm values.")
-    print("Compare pairs of lines:")
+    # Pick some values of x=cos(theta) to compare.
     ii = [0,Nx//3,2*Nx//3,Nx-1]
+    print("\nCompare our class to SciPy for x=cos(theta)=",sht.x[ii])
+    # First cross-check some Ylm values for sanity.
+    print("\nCheck Ylm values.")
+    print("Compare pairs of lines labeled by (ell,m):")
     Ylm= sht.Yv
     for ell in [1,10,25,40]:
         for m in [0,5,15,25,40]:
@@ -51,7 +54,7 @@ if __name__=="__main__":
     #
     # Now print some values for the derivative (wrt Cos[theta]).
     print("\nCheck Ylm derivatives.")
-    print("Compare pairs of lines:")
+    print("Compare pairs of lines labeled by (ell,m):")
     Ym = np.zeros_like(sht.Yd)
     Ym[sht.indx( 2, 0),:] = 3*sht.x * np.sqrt(5/4./np.pi)
     Ym[sht.indx(10,10),:] = -5.42630291944221461*sht.x*(1-sht.x**2)**4
