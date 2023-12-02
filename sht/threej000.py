@@ -18,14 +18,14 @@ def threej000(ell1,ell2,ell3,store):
     # Work out the index.
     ii   = (j1*(j1+1)*(j1+2))//6 + (j2*(j2+1))//2 + j3
     if ii<store.size:
-        if store[ii]<1e39:
+        if store[ii]<1e41:
             return(store[ii])
     if (J%2>0):
         if (ii<store.size):
             store[ii] = 0.0
         return(0.0)
     if (j1==j2)&(j3==0):
-        res = (-1.) ** j1 / np.sqrt(2 * j1 + 1.0)
+        res = (-1.)**j1 / np.sqrt(2*j1 + 1.0)
         if (ii<store.size):
             store[ii] = res
         return( res )
@@ -45,15 +45,15 @@ def threej000(ell1,ell2,ell3,store):
 
 
 class Wigner3j:
-    def __init__(self, Nl):
+    def __init__(self,Nl):
         """
         Class to compute and save/load Wigner 3j symbols.
         :param Nl: int. (One plus) the maximum l for which to compute the 3j's
         """
         self.Nl = Nl
         self.store = self.get_3js()
-
-    def __call__(self, l1, l2, l3):
+        #
+    def __call__(self,l1,l2,l3):
         """
         Compute the Wigner 3j symbol for integer l's and m1=m2=m3=0.
         :param l1: int. l1
@@ -62,10 +62,10 @@ class Wigner3j:
         :return: float. The Wigner 3j symbol
         """
         return self.store[self.get_index(l1, l2, l3)]
-
-    def get_index(self, l1, l2, l3):
+        #
+    def get_index(self,l1,l2,l3):
         """
-        Get the index of the Wigner 3j symbol in the table.
+        Get the index of the Wigner 3j symbol (with m1=m2=m3=0) in the table.
         :param l1: int. l1
         :param l2: int. l2
         :param l3: int. l3
@@ -77,31 +77,35 @@ class Wigner3j:
         j3 = min(ells)
         j2 = l1 + l2 + l3 - j1 - j3
         # Work out the index.
-        return  (j1 * (j1 + 1) * (j1 + 2)) // 6 + (j2 * (j2 + 1)) // 2 + j3
-
+        return(  (j1*(j1+1)*(j1+2))//6 + (j2*(j2+1))//2 + j3 )
+        #
     def get_3js(self):
-        """A loop to do timing tests on."""
+        """A loop to fill the 'store' array.  Can also be used for
+        timing tests."""
         store = np.zeros((self.Nl*(self.Nl+1)*(self.Nl+2))//6,dtype='float64')+1e42
         for j1 in range(self.Nl):
             for j2 in range(j1 + 1):
                 for j3 in range(j2 + 1):
                     threej000(j1, j2, j3, store)
         return(store)
+        #
+
 
 if __name__=="__main__":
+    # Do some tests and timing of the class.
     for Nl in [1000]:
         t0 = time.time()
         temp_3js = Wigner3j(Nl)
-        print("Nl=",Nl," took ",time.time()-t0," seconds.")
-
+        print("Generating Nl=",Nl," took ",time.time()-t0," seconds.",flush=True)
+        #
         # Compare to sympy
         l1=Nl-1
         l2=Nl-2
         l3=1
-        our_result = temp_3js(l1,l2,l3)
+        our_result   = temp_3js(l1,l2,l3)
         sympy_result = wigner_3j(l1,l2,l3,0,0,0).n(32)
         print('Testing l1={}, l2={}, l3={}'.format(l1,l2,l3))
         print('Fractional difference with sympy: ',
-              (our_result-sympy_result)/sympy_result)
+              (our_result-sympy_result)/(sympy_result+1e-40))
         print('\n')
     #
