@@ -11,7 +11,7 @@ from  threej000 import Wigner3j
 from scipy.interpolate import interp1d
 
 class MaskDeconvolution:
-    def __init__(self, lmax, W_l, W_l_ells, verbose=True):
+    def __init__(self, lmax, W_l, verbose=True):
         """
         Class to deconvolve the mode-coupling of pseudo-Cls.
 
@@ -20,21 +20,20 @@ class MaskDeconvolution:
         to mode-decouple the pseudo-Cls of noise-debiased bandpowers.
 
         :param lmax: int. Maximum multipole to compute the mode-coupling matrix for.
-        :param W_l: 1D numpy array. Window function.
-        :param W_l_ells: 1D numpy array. Ells at which the window function is provided.
-               The maximum ell must be >= than 2*lmax for deconvolution to work.
+        :param W_l: 1D numpy array. Window function. Must be provided at every ell up
+                to at least 2*lmax for deconvolution to work.
         :param verbose: bool. Whether to print out information about progress
         """
-        assert (W_l_ells[-1] >= 2*lmax), "W_l must be provided up to at least 2*lmax"
+        assert ((len(W_l)-1) >= 2*lmax), "W_l must be provided up to at least 2*lmax"
         self.lmax = lmax
+        self.W_l = W_l
 
         # Precompute the expensive stuff
         if verbose:
             print("Precomputing Wigner 3j symbols...")
         # Precompute the required Wigner 3js
         self.w3j000 = Wigner3j(2 * lmax + 1)
-        # Interpolate the window function (in case it's not provided at every ell)
-        self.W_l = interp1d(W_l_ells, W_l, kind='cubic')
+
         if verbose:
             print("Computing the mode-coupling matrix...")
         # Compute the mode-coupling matrix
@@ -82,7 +81,7 @@ class MaskDeconvolution:
             else:
                 return 0
         else:
-            return self.W_l(l)
+            return self.W_l[l]
 
     def get_M(self, debug=False):
         """
