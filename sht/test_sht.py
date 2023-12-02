@@ -26,6 +26,7 @@ if __name__=="__main__":
     # the ell,m indices and theta,phi arguments reversed!
     from scipy.special import sph_harm
     #
+    print("Generating scipy library table for ell<45.",flush=True)
     Ylb = np.zeros( ((Nl*(Nl+1))//2,Nx) )
     for ell in range(45):
         for m in range(ell+1):
@@ -34,7 +35,8 @@ if __name__=="__main__":
                 theta     = np.arccos(x)
                 Ylb[ii,i] = np.real( sph_harm(m,ell,0,theta) )
     # Just cross-check some Ylm values for sanity.
-    print("Values:")
+    print("Check Ylm values.")
+    print("Compare pairs of lines:")
     ii = [0,Nx//3,2*Nx//3,Nx-1]
     Ylm= sht.Yv
     for ell in [1,10,25,40]:
@@ -48,10 +50,11 @@ if __name__=="__main__":
                 print("\t"+mys)
     #
     # Now print some values for the derivative (wrt Cos[theta]).
-    print("\nDerivatives:")
+    print("\nCheck Ylm derivatives.")
+    print("Compare pairs of lines:")
     Ym = np.zeros_like(sht.Yd)
     Ym[sht.indx( 2, 0),:] = 3*sht.x * np.sqrt(5/4./np.pi)
-    Ym[sht.indx(10,10),:] = -4.19758*sht.x*(1-sht.x**2)**4*np.sqrt(21/4./np.pi)
+    Ym[sht.indx(10,10),:] = -5.42630291944221461*sht.x*(1-sht.x**2)**4
     Yd = sht.Yd
     for ell,m in zip([2,10],[0,10]):
         lbs,mys,j = "","",sht.indx(ell,m)
