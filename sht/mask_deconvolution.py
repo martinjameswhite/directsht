@@ -135,7 +135,7 @@ class MaskDeconvolution:
         """
         return np.dot(self.bins, Cl)
 
-    def decouple_Cls(self, Minv, Cb, Nb):
+    def decouple_Cls(self, Minv, Cb, Nb=0):
         """
         Noise-debias and bode-decouple some bandpowers
         :param Minv: 2D array of shape (lmax+1//lperBin,lmax+1//lperBin)
@@ -155,7 +155,5 @@ class MaskDeconvolution:
         """
         assert (self.Mbb_inv is not None), "Must call __call__ before convolving theory Cls"
         assert (len(Clt) == self.lmax + 1), ("Clt must be provided up to the lmax")
-        Fmat = np.matmul(self.Mbb_inv, np.matmul(self.bins, self.Mll))
-        return np.dot(Fmat, Clt)
-
+        return self.decouple_Cls(self.Mbb_inv, self.bin_Cls(np.dot(self.Mll, Clt)))
 
