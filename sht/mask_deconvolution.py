@@ -43,22 +43,19 @@ class MaskDeconvolution:
         # Compute the mode-coupling matrix
         self.Mll = self.get_M()
         #
-    def __call__(self, C_l, N_l, lperBin=2 ** 4):
+    def __call__(self,C_l,lperBin):
         """
         Compute the noise-debiased and mode-decoupled bandpowers given some binning scheme.
         :param C_l: 1D numpy array of length self.lmax + 1.
                     Per-ell angular power spectrum of the signal.
-        :param N_l: 1D numpy array of length self.lmax + 1.
-                    Per-ell angular power spectrum of the noise.
-        :param lperBin: int. Number of ells per bin.
+        :param binning_matrix: An Nbin x Nell matrix to perform the binning.
         :return: tuple of (1D numpy array, 1D numpy array). The first array contains
                     the ells at which the bandpowers are computed. The second array
                     contains the noise-debiased and mode-decoupled bandpowers.
         """
+        # We could alternatively pad this?
         assert (len(C_l) == self.lmax + 1), ("C_l must be provided up to the lmax"
                                              " with which the class was initialized")
-        assert (len(C_l)==len(N_l)), "C_l and N_l must have the same length"
-        assert ((self.lmax+1) % lperBin == 0), "lmax+1 must be a multiple of lperBin"
         self.lperBin = lperBin
         # Bin the matrix
         self.init_binning()
@@ -70,7 +67,7 @@ class MaskDeconvolution:
         # Mode-decouple the noise-debiased bandpowers
         Cb_decoupled = self.decouple_Cls(self.Mbb_inv, Cb, Nb)
         return (self.binned_ells, Cb_decoupled)
-
+        #
     def W(self, l, debug=False):
         """
         Window function for a given multipole l.
@@ -104,7 +101,7 @@ class MaskDeconvolution:
                                       * self.W(l3, debug) / (4 * np.pi))
                         M[l2, l1] = M[l1, l2]
         return M
-
+        #
     def init_binning(self):
         """
         Set up the binning matrix to combine Cls and mode-coupling
