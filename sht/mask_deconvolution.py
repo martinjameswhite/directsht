@@ -6,9 +6,13 @@
 
 import numpy  as np
 import sys
+from   scipy.interpolate import interp1d
+
 sys.path.append('../sht')
 from  threej000 import Wigner3j
-from scipy.interpolate import interp1d
+
+
+
 
 class MaskDeconvolution:
     def __init__(self, lmax, W_l, verbose=True):
@@ -20,25 +24,25 @@ class MaskDeconvolution:
         to mode-decouple the pseudo-Cls of noise-debiased bandpowers.
 
         :param lmax: int. Maximum multipole to compute the mode-coupling matrix for.
-        :param W_l: 1D numpy array. Window function. Must be provided at every ell up
-                to at least 2*lmax for deconvolution to work.
+        :param W_l: 1D numpy array. Window function. Must be provided at every ell.
+                    If shorter than 2*lmax will be right-padded with zeros.
         :param verbose: bool. Whether to print out information about progress
         """
-        assert ((len(W_l)-1) >= 2*lmax), "W_l must be provided up to at least 2*lmax"
         self.lmax = lmax
-        self.W_l = W_l
-
+        pad       = max(0,2*lmax+1-W_l.size)
+        self.W_l  = np.pad(W_l,(0,pad),'constant',constant_values=0)
+        # 
         # Precompute the expensive stuff
         if verbose:
             print("Precomputing Wigner 3j symbols...")
         # Precompute the required Wigner 3js
         self.w3j000 = Wigner3j(2 * lmax + 1)
-
+        #
         if verbose:
             print("Computing the mode-coupling matrix...")
         # Compute the mode-coupling matrix
         self.Mll = self.get_M()
-
+        #
     def __call__(self, C_l, N_l, lperBin=2 ** 4):
         """
         Compute the noise-debiased and mode-decoupled bandpowers given some binning scheme.
