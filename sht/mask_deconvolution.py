@@ -60,11 +60,11 @@ class MaskDeconvolution:
         self.init_binning()
         Mbb = self.bin_matrix(self.Mll)
         # Invert the binned matrix
-        Mbb_inv = np.linalg.inv(Mbb)
+        self.Mbb_inv = np.linalg.inv(Mbb)
         # Bin the Cls and Nls
         Cb = self.bin_Cls(C_l); Nb = self.bin_Cls(N_l)
         # Mode-decouple the noise-debiased bandpowers
-        Cb_decoupled = self.decouple_Cls(Mbb_inv, Cb, Nb)
+        Cb_decoupled = self.decouple_Cls(self.Mbb_inv, Cb, Nb)
         return (self.binned_ells, Cb_decoupled)
 
     def W(self, l, debug=False):
@@ -146,4 +146,16 @@ class MaskDeconvolution:
                     mode-decoupled bandpowers
         """
         return np.matmul(Cb-Nb, Minv)
+
+    def convolve_theory_Cls(self, Clt):
+        """
+        Convolve some theory Cls with the bandpower window function
+        :param Clt: 1D numpy array of length self.lmax+1. Theory Cls
+        :return: 1D numpy array of length (lmax+1//lperBin)
+        """
+        assert (self.Mbb_inv is not None), "Must call __call__ before convolving theory Cls"
+        assert (len(Clt) == self.lmax + 1), ("Clt must be provided up to the lmax")
+        Fmat = np.matmul(self.Mbb_inv, np.matmul(self.bins, self.Mll))
+        return np.dot(Fmat, Clt)
+
 
