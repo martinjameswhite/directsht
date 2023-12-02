@@ -121,6 +121,33 @@ class MaskDeconvolution:
         self.bins_no_weight[0, 0] = 0.0
         self.binned_ells = np.dot(self.bins, np.arange(self.lmax + 1))
 
+    def binning_matrix(self,type='linear',step=16):
+        """
+        Returns a 'binning matrix', B, such that B.vec is a binned
+        version of vec.
+        :param type: Type of binning.
+                     'linear' (default) gives linear binning.
+        :param step: size of linear step.
+        :return 2D array of shape (Nbins,lmax).
+        """
+        Nl   = self.lmax+1
+        bins = np.zeros( (Nl,Nl) )
+        if type=='linear':
+            dell = lambda ell: step
+        elif type=='sqrt':
+            dell = lambda ell: int(np.ceil(np.sqrt(4.*ell)+step))
+        else:
+            raise RuntimeError("Unknown step type.")
+        ii = 0
+        l0 = 2 # Remove monopole and dipole.
+        l1 = l0 + dell(l0)
+        while l1<=Nl:
+            bins[ii,l0:min(l1,Nl)] = 1/float(l1-l0)
+            l0,l1 = l1,l1+dell(l1)
+            ii   += 1
+        bins = bins[:ii,:]
+        return(bins)
+        #
     def bin_matrix(self, M):
         """
         Bin the mode-coupling matrix into bandpowers
