@@ -7,7 +7,7 @@ python3 -m pip install -v git+https://github.com/martinjameswhite/direct_sht
 
 It requires numpy, scipy and numba.  If JAX is available it can be used to
 speed up the computation, but the code will automatically fall back to numpy
-if JAX is not present.
+if JAX is not present.  Some of the notebooks use healpy for visualization.
 
 ***
 
