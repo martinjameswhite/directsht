@@ -157,13 +157,27 @@ class MaskDeconvolution:
         """
         return np.matmul(Cb,Minv)
         #
-    def convolve_theory_Cls(self,Clt):
+    def convolve_theory_Cls(self,Clt,bins):
         """
         Convolve some theory Cls with the bandpower window function
         :param Clt: 1D numpy array of length self.lmax+1. Theory Cls
-        :return: 1D numpy array of length (lmax+1//lperBin)
+        :param bins: An Nbin x Nell matrix to perform the binning.
+        :return: 1D numpy array
         """
-        assert (self.Mbb_inv is not None), "Must call __call__ before convolving theory Cls"
+        # We could alternatively pad this?
         assert (len(Clt) == self.lmax + 1), ("Clt must be provided up to the lmax")
-        return self.decouple_Cls(self.Mbb_inv, self.bin_Cls(np.dot(self.Mll, Clt)))
-
+        # Use where the binning_matrix is non-zero to define the ells for which
+        # our bandpowers would be assumed to be constants.
+        bins_no_wt = np.zeros_like(bins)
+        bins_no_wt[bins>0] = 1.0
+        # Bin the mode-coupling matrix into those bins.
+        Mbb = np.matmul(np.matmul(bins,self.Mll),bins_no_wt.T)
+        # Invert the binned matrix
+        Mbb_inv = np.linalg.inv(Mbb)
+        # Bin the theory Cl's.
+        Cb = np.dot(bins,np.dot(self.Mll,Clt))
+        # Mode-decouple the bandpowers
+        Cb_decoupled = self.decouple_Cls(Mbb_inv,Cb)
+        # Compute the binned ells.
+        binned_ells = np.dot(bins,np.arange(self.lmax+1))/np.sum(bins,axis=1)
+        return( (binned_ells,Cb_decoupled) )
