@@ -65,11 +65,11 @@ class MaskDeconvolution:
         # Bin the mode-coupling matrix into those bins.
         Mbb = np.matmul(np.matmul(bins,self.Mll),bins_no_weight.T)
         # Invert the binned matrix
-        self.Mbb_inv = np.linalg.inv(Mbb)
+        Mbb_inv = np.linalg.inv(Mbb)
         # Bin the Cls.
-        Cb = np.dot(self.bins,Cl)
+        Cb = np.dot(bins,Cl)
         # Mode-decouple the bandpowers
-        Cb_decoupled = np.matmul(Cb,self.Mbb_inv)
+        Cb_decoupled = np.matmul(Cb,Mbb_inv)
         # Compute the binned ells.
         binned_ells = np.dot(bins,np.arange(self.lmax+1))/np.sum(bins,axis=1)
         return( (binned_ells,Cb_decoupled) )
