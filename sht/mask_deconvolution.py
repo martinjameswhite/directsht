@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 #
 # Code to deconvolve the mode-coupling of pseudo-Cls
-# induced by a mask
+# induced by a mask.  Since this code is run only
+# rarely we have not attempted any optimizations.
 #
 
 import numpy  as np
