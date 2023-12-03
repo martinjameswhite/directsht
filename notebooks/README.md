@@ -9,6 +9,12 @@ In addition to the notebooks there are a few scripts that can be run.
 These were designed to allow the simple use of NERSC compute nodes for
 larger jobs, rather than running them on a shared Jupyter server.
 
+***
+
+`analyzing_mocks.ipynb` is the main notebook, and it compares different
+techniques for performing a harmonic-space two-point analysis (i.e. an
+angular power spectrum) on a point set.
+
 `golden_spiral.ipynb` generates a set of points laid out in a Golden
 spiral (a.k.a. Fibonacci spiral) pattern and then analyzes their
 angular clustering in harmonic space.  This somewhat artificial example
