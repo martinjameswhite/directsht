@@ -146,17 +146,17 @@ class MaskDeconvolution:
     #    """
     #    return np.matmul(np.matmul(self.bins, M), self.bins_no_weight.T)
     #
-    def decouple_Cls(self,Minv,Cb):
-        """
-        Noise-debias and bode-decouple some bandpowers
-        :param Minv: 2D array of shape (lmax+1//lperBin,lmax+1//lperBin)
-                     containing the inverse of the binned mode-coupling matrix
-        :param Cb: 1D array of shape (lmax+1//lperBin) containing the binned Cls
-        :return: 1D array of shape (lmax+1//lperBin) containing the
-                    mode-decoupled bandpowers
-        """
-        return np.matmul(Cb,Minv)
-        #
+    #def decouple_Cls(self,Minv,Cb):
+    #    """
+    #    Noise-debias and bode-decouple some bandpowers
+    #    :param Minv: 2D array of shape (lmax+1//lperBin,lmax+1//lperBin)
+    #                 containing the inverse of the binned mode-coupling matrix
+    #    :param Cb: 1D array of shape (lmax+1//lperBin) containing the binned Cls
+    #    :return: 1D array of shape (lmax+1//lperBin) containing the
+    #                mode-decoupled bandpowers
+    #    """
+    #    return np.matmul(Cb,Minv)
+    #
     def convolve_theory_Cls(self,Clt,bins):
         """
         Convolve some theory Cls with the bandpower window function
