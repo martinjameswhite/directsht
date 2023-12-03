@@ -5,7 +5,9 @@ The code can be installed with
 
 python3 -m pip install -v git+https://github.com/martinjameswhite/direct_sht
 
-It requires numpy, scipy and numba.
+It requires numpy, scipy and numba.  If JAX is available it can be used to
+speed up the computation, but the code will automatically fall back to numpy
+if JAX is not present.
 
 ***
 
@@ -18,7 +20,7 @@ alm.
 
 First import the main class and create an instance:
 ```
-from sht import DirectSHT
+from sht.sht import DirectSHT
 
 # The class takes a number of multipoles to cmopute (lmax=Nl-1)
 # and the number of spline points for interpolation.
