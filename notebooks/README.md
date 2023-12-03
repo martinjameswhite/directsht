@@ -9,6 +9,13 @@ In addition to the notebooks there are a few scripts that can be run.
 These were designed to allow the simple use of NERSC compute nodes for
 larger jobs, rather than running them on a shared Jupyter server.
 
+`golden_spiral.ipynb` generates a set of points laid out in a Golden
+spiral (a.k.a. Fibonacci spiral) pattern and then analyzes their
+angular clustering in harmonic space.  This somewhat artificial example
+demonstrates point sets with significant small-scale power can be tricky
+to analyze with pixelized maps (unless higher-order charge assignment
+schemes are used, which we do not consider here).
+
 `making_maps.ipynb` generates spherical harmonic coefficients for a set
 of delta functions and then uses Healpy maps to visualize the maps
 generated from these coefficients.  It illustrates the ringing from a
