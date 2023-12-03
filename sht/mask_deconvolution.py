@@ -74,6 +74,31 @@ class MaskDeconvolution:
         binned_ells = np.dot(bins,np.arange(self.lmax+1))/np.sum(bins,axis=1)
         return( (binned_ells,Cb_decoupled) )
         #
+    def convolve_theory_Cls(self,Clt,bins):
+        """
+        Convolve some theory Cls with the bandpower window function
+        :param Clt: 1D numpy array of length self.lmax+1. Theory Cls
+        :param bins: An Nbin x Nell matrix to perform the binning.
+        :return: 1D numpy array
+        """
+        # We could alternatively pad this?
+        assert (len(Clt) == self.lmax + 1), ("Clt must be provided up to the lmax")
+        # Use where the binning_matrix is non-zero to define the ells for which
+        # our bandpowers would be assumed to be constants.
+        bins_no_wt = np.zeros_like(bins)
+        bins_no_wt[bins>0] = 1.0
+        # Bin the mode-coupling matrix into those bins.
+        Mbb = np.matmul(np.matmul(bins,self.Mll),bins_no_wt.T)
+        # Invert the binned matrix
+        Mbb_inv = np.linalg.inv(Mbb)
+        # Bin the theory Cl's.
+        Cb = np.dot(bins,np.dot(self.Mll,Clt))
+        # Mode-decouple the bandpowers
+        Cb_decoupled = self.decouple_Cls(Mbb_inv,Cb)
+        # Compute the binned ells.
+        binned_ells = np.dot(bins,np.arange(self.lmax+1))/np.sum(bins,axis=1)
+        return( (binned_ells,Cb_decoupled) )
+        #
     def W(self,l,debug=False):
         """
         Window function for a given multipole l.
@@ -84,9 +109,9 @@ class MaskDeconvolution:
         if debug:
             # In the full sky, the mode-coupling matrix should become the identity matrix
             if l == 0:
-                return 4 * np.pi  # [\int d\hat{n} Y^*_{00}(\hat{n})]^2
+                return(4*np.pi)  # [\int d\hat{n} Y^*_{00}(\hat{n})]^2
             else:
-                return 0
+                return(0)
         else:
             return self.W_l[l]
         #
@@ -146,38 +171,14 @@ class MaskDeconvolution:
     #    """
     #    return np.matmul(np.matmul(self.bins, M), self.bins_no_weight.T)
     #
-    #def decouple_Cls(self,Minv,Cb):
-    #    """
-    #    Noise-debias and bode-decouple some bandpowers
-    #    :param Minv: 2D array of shape (lmax+1//lperBin,lmax+1//lperBin)
-    #                 containing the inverse of the binned mode-coupling matrix
-    #    :param Cb: 1D array of shape (lmax+1//lperBin) containing the binned Cls
-    #    :return: 1D array of shape (lmax+1//lperBin) containing the
-    #                mode-decoupled bandpowers
-    #    """
-    #    return np.matmul(Cb,Minv)
-    #
-    def convolve_theory_Cls(self,Clt,bins):
+    def decouple_Cls(self,Minv,Cb):
         """
-        Convolve some theory Cls with the bandpower window function
-        :param Clt: 1D numpy array of length self.lmax+1. Theory Cls
-        :param bins: An Nbin x Nell matrix to perform the binning.
-        :return: 1D numpy array
+        Noise-debias and bode-decouple some bandpowers
+        :param Minv: 2D array of shape (lmax+1//lperBin,lmax+1//lperBin)
+                     containing the inverse of the binned mode-coupling matrix
+        :param Cb: 1D array of shape (lmax+1//lperBin) containing the binned Cls
+        :return: 1D array of shape (lmax+1//lperBin) containing the
+                    mode-decoupled bandpowers
         """
-        # We could alternatively pad this?
-        assert (len(Clt) == self.lmax + 1), ("Clt must be provided up to the lmax")
-        # Use where the binning_matrix is non-zero to define the ells for which
-        # our bandpowers would be assumed to be constants.
-        bins_no_wt = np.zeros_like(bins)
-        bins_no_wt[bins>0] = 1.0
-        # Bin the mode-coupling matrix into those bins.
-        Mbb = np.matmul(np.matmul(bins,self.Mll),bins_no_wt.T)
-        # Invert the binned matrix
-        Mbb_inv = np.linalg.inv(Mbb)
-        # Bin the theory Cl's.
-        Cb = np.dot(bins,np.dot(self.Mll,Clt))
-        # Mode-decouple the bandpowers
-        Cb_decoupled = self.decouple_Cls(Mbb_inv,Cb)
-        # Compute the binned ells.
-        binned_ells = np.dot(bins,np.arange(self.lmax+1))/np.sum(bins,axis=1)
-        return( (binned_ells,Cb_decoupled) )
+        return np.matmul(Cb,Minv)
+        #
