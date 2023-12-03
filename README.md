@@ -9,7 +9,7 @@ It requires numpy, scipy and numba.
 
 ***
 
-##Usage
+#Usage
 
 The code is relatively straightforward to use.  Given a set of points
 defined by arrays of theta and phi (in radians) and weights the DirectSHT
@@ -28,8 +28,10 @@ Nx = 1024
 # Generate an instance of the class.
 sht= DirectSHT(Nl,Nx)
 ```
+If Nl and Nx are large then creating an instance can take a few seconds
+because the code computes a table of spherical harmonics during initialization.
 
-then the transform can be done with
+Then the transform can be done with
 ```
 alms = sht(thetas,phis,weights)
 ```
