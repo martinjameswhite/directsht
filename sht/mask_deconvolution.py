@@ -16,7 +16,7 @@ from  threej000 import Wigner3j
 
 
 class MaskDeconvolution:
-    def __init__(self, lmax, W_l, verbose=True):
+    def __init__(self,Nl,W_l,verbose=True):
         """
         Class to deconvolve the mode-coupling of pseudo-Cls.
 
@@ -24,50 +24,55 @@ class MaskDeconvolution:
         initialization so that they do not have to be recomputed on successive calls
         to mode-decouple the pseudo-Cls of noise-debiased bandpowers.
 
-        :param lmax: int. Maximum multipole to compute the mode-coupling matrix for.
+        :param Nl: int. The number of multipoles to compute the mode-coupling matrix for.
+                        The maximum ell, lmax, is Nl-1.
         :param W_l: 1D numpy array. Window function. Must be provided at every ell.
                     If shorter than 2*lmax will be right-padded with zeros.
         :param verbose: bool. Whether to print out information about progress
         """
-        self.lmax = lmax
-        pad       = max(0,2*lmax+1-W_l.size)
+        self.lmax = Nl-1
+        pad       = max(0,2*Nl-1-W_l.size)
         self.W_l  = np.pad(W_l,(0,pad),'constant',constant_values=0)
         # 
         # Precompute the expensive stuff
         if verbose:
             print("Precomputing Wigner 3j symbols...")
         # Precompute the required Wigner 3js
-        self.w3j000 = Wigner3j(2 * lmax + 1)
+        self.w3j000 = Wigner3j(2*Nl-1)
         #
         if verbose:
             print("Computing the mode-coupling matrix...")
         # Compute the mode-coupling matrix
         self.Mll = self.get_M()
         #
-    def __call__(self,C_l,lperBin):
+    def __call__(self,Cl,bins):
         """
         Compute the noise-debiased and mode-decoupled bandpowers given some binning scheme.
         :param C_l: 1D numpy array of length self.lmax + 1.
                     Per-ell angular power spectrum of the signal.
-        :param binning_matrix: An Nbin x Nell matrix to perform the binning.
+        :param bins: An Nbin x Nell matrix to perform the binning.
         :return: tuple of (1D numpy array, 1D numpy array). The first array contains
                     the ells at which the bandpowers are computed. The second array
-                    contains the noise-debiased and mode-decoupled bandpowers.
+                    contains the mode-decoupled bandpowers.
         """
         # We could alternatively pad this?
-        assert (len(C_l) == self.lmax + 1), ("C_l must be provided up to the lmax"
+        assert (len(Cl) == self.lmax + 1), ("C_l must be provided up to the lmax"
                                              " with which the class was initialized")
-        self.lperBin = lperBin
-        # Bin the matrix
-        self.init_binning()
-        Mbb = self.bin_matrix(self.Mll)
+        # Use where the binning_matrix is non-zero to define the ells for which
+        # our bandpowers would be assumed to be constants.
+        bins_no_weight = np.zeros_like(bins)
+        bins_no_weight[bins>0] = 1.0
+        # Bin the mode-coupling matrix into those bins.
+        Mbb = np.matmul(np.matmul(bins,self.Mll),bins_no_weight.T)
         # Invert the binned matrix
         self.Mbb_inv = np.linalg.inv(Mbb)
-        # Bin the Cls and Nls
-        Cb = self.bin_Cls(C_l)
-        # Mode-decouple the noise-debiased bandpowers
-        Cb_decoupled = self.decouple_Cls(self.Mbb_inv,Cb)
-        return( (self.binned_ells,Cb_decoupled) )
+        # Bin the Cls.
+        Cb = np.dot(self.bins,Cl)
+        # Mode-decouple the bandpowers
+        Cb_decoupled = np.matmul(Cb,self.Mbb_inv)
+        # Compute the binned ells.
+        binned_ells = np.dot(bins,np.arange(self.lmax+1))/np.sum(bins,axis=1)
+        return( (binned_ells,Cb_decoupled) )
         #
     def W(self,l,debug=False):
         """
@@ -104,22 +109,6 @@ class MaskDeconvolution:
         M /= 4*np.pi
         return(M)
         #
-    def init_binning(self):
-        """
-        Set up the binning matrix to combine Cls and mode-coupling
-        matrix into coarser ell bins.
-        """
-        self.bins = np.zeros(((self.lmax+1) // self.lperBin, self.lmax + 1))
-        self.bins_no_weight = self.bins.copy()
-        for i in range(0, self.lmax + 1, self.lperBin):
-            self.bins[i // self.lperBin, i:i + self.lperBin] = 1 / float(self.lperBin)
-            self.bins_no_weight[i // self.lperBin, i:i + self.lperBin] = 1
-        # Also set it such that we drop the ell=0 bin
-        # when we do our average(s).
-        self.bins[0, 0] = 0.0
-        self.bins_no_weight[0, 0] = 0.0
-        self.binned_ells = np.dot(self.bins, np.arange(self.lmax+1))
-
     def binning_matrix(self,type='linear',step=16):
         """
         Returns a 'binning matrix', B, such that B.vec is a binned
@@ -147,36 +136,28 @@ class MaskDeconvolution:
         bins = bins[:ii,:]
         return(bins)
         #
-    def bin_matrix(self,M):
-        """
-        Bin the mode-coupling matrix into bandpowers
-        :param M: 2D array of shape (lmax+1,lmax+1) containing
-                  the mode-coupling matrix.
-        :return: 2D array of shape (lmax+1//lperBin,lmax+1//lperBin)
-                  containing the binned mode-coupling matrix
-        """
-        return np.matmul(np.matmul(self.bins, M), self.bins_no_weight.T)
-        #
-    def bin_Cls(self,Cl):
-        """
-        Bin the Cls into bandpowers
-        :param Cl: 1D array of shape (lmax+1) containing the Cls
-        :return: 1D array of shape (lmax+1//lperBin) containing the binned Cls
-        """
-        return np.dot(self.bins, Cl)
-        #
-    def decouple_Cls(self,Minv,Cb):
-        """
-        Noise-debias and bode-decouple some bandpowers
-        :param Minv: 2D array of shape (lmax+1//lperBin,lmax+1//lperBin)
-                     containing the inverse of the binned mode-coupling matrix
-        :param Cb: 1D array of shape (lmax+1//lperBin) containing the binned Cls
-        :return: 1D array of shape (lmax+1//lperBin) containing the
-                    mode-decoupled bandpowers
-        """
-        return np.matmul(Cb,Minv)
-        #
-    def convolve_theory_Cls(self, Clt):
+    #def bin_matrix(self,M):
+    #    """
+    #    Bin the mode-coupling matrix into bandpowers
+    #    :param M: 2D array of shape (lmax+1,lmax+1) containing
+    #              the mode-coupling matrix.
+    #    :return: 2D array of shape (lmax+1//lperBin,lmax+1//lperBin)
+    #              containing the binned mode-coupling matrix
+    #    """
+    #    return np.matmul(np.matmul(self.bins, M), self.bins_no_weight.T)
+    #    #
+    #def decouple_Cls(self,Minv,Cb):
+    #    """
+    #    Noise-debias and bode-decouple some bandpowers
+    #    :param Minv: 2D array of shape (lmax+1//lperBin,lmax+1//lperBin)
+    #                 containing the inverse of the binned mode-coupling matrix
+    #    :param Cb: 1D array of shape (lmax+1//lperBin) containing the binned Cls
+    #    :return: 1D array of shape (lmax+1//lperBin) containing the
+    #                mode-decoupled bandpowers
+    #    """
+    #    return np.matmul(Cb,Minv)
+    #
+    def convolve_theory_Cls(self,Clt):
         """
         Convolve some theory Cls with the bandpower window function
         :param Clt: 1D numpy array of length self.lmax+1. Theory Cls
