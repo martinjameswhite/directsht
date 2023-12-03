@@ -9,13 +9,19 @@ In addition to the notebooks there are a few scripts that can be run.
 These were designed to allow the simple use of NERSC compute nodes for
 larger jobs, rather than running them on a shared Jupyter server.
 
-making_maps.ipynb generates spherical harmonic coefficients for a set
+`making_maps.ipynb` generates spherical harmonic coefficients for a set
 of delta functions and then uses Healpy maps to visualize the maps
 generated from these coefficients.  It illustrates the ringing from a
 truncated SHT, and shows that our coefficients are returned in a format
 compatible with Healpy's conventions for manipulating maps and SHT
 coefficients.
 
-mode_coupling_mat.ipynb demonstrates that the "helper code" we provide
+`making_mocks.ipynb` gives an example of how to make a set of points whose
+clustering can be analyzed.  This uses a crude version of a lognormal mock
+method, code for which is distributed with the repo.  We use these mocks
+primarily as an example dataset to analyze to show how different approaches
+compare and how well they agree.
+
+`mode_coupling_mat.ipynb` demonstrates that the "helper code" we provide
 to compute the mode-coupling matrix and the window matrix for the
 pseudo-spectrum method works as advertized.
