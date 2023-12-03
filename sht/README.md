@@ -9,3 +9,7 @@ and window matrices that are used in the pseudo-spectrum method.  These
 are provided for convenience and since they do not need to be recomputed
 very often the methods were not written in an optimized manner.  Finally
 some utilities are used as part of the SHT code.
+
+As part of the testing of the code we use point sets generated from a
+lognormal mock catalog.  A (somewhat crude) code for producing such a
+set of points is provided as well.
