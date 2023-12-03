@@ -96,9 +96,9 @@ class MaskDeconvolution:
             for l2 in range(self.lmax+1):
                 for l3 in range(abs(l1-l2),l1+l2+1):
                     if (l1+l2+l3)%2==0:
-                        M[l1,l2] += (2*l2+1)*(2*l3+1)
-                                  * self.w3j000(l1,l2,l3)**2
-                                  * self.W(l3,debug)
+                        M[l1,l2] += (2*l2+1)*(2*l3+1) *\
+                                    self.w3j000(l1,l2,l3)**2 *\
+                                    self.W(l3,debug)
         M /= 4*np.pi
         return(M)
         #
