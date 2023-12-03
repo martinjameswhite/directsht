@@ -9,7 +9,7 @@ It requires numpy, scipy and numba.
 
 ***
 
-#Usage
+## Usage
 
 The code is relatively straightforward to use.  Given a set of points
 defined by arrays of theta and phi (in radians) and weights the DirectSHT
