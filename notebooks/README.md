@@ -15,3 +15,7 @@ generated from these coefficients.  It illustrates the ringing from a
 truncated SHT, and shows that our coefficients are returned in a format
 compatible with Healpy's conventions for manipulating maps and SHT
 coefficients.
+
+mode_coupling_mat.ipynb demonstrates that the "helper code" we provide
+to compute the mode-coupling matrix and the window matrix for the
+pseudo-spectrum method works as advertized.
