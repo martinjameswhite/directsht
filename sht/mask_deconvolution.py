@@ -7,7 +7,6 @@
 
 import numpy  as np
 import sys
-from   scipy.interpolate import interp1d
 
 sys.path.append('../sht')
 from  threej000 import Wigner3j
