@@ -134,7 +134,7 @@ class MaskDeconvolution:
         M /= 4*np.pi
         return(M)
         #
-    def get_Mbb_inv(bins):
+    def get_Mbb_inv(self,bins):
         """
         Returns the bin-bin mode-coupling matrix.
         This is meant largely for internal use.
