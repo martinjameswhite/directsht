@@ -153,7 +153,7 @@ class MaskDeconvolution:
         Mbb_inv = np.linalg.inv(Mbb)
         return(Mbb_inv)
         #
-    def binning_matrix(self,type='linear',start=16,step=16):
+    def binning_matrix(self,type='linear',start=0,step=16):
         """
         Returns a 'binning matrix', B, such that B.vec is a binned
         version of vec.  This is a "helper" function.
