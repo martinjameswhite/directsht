@@ -96,7 +96,7 @@ class MaskDeconvolution:
         # Get the inverse binned matrix
         Mbb_inv = self.get_Mbb_inv(bins)
         # Bin the theory Cl's.
-        Mbl = np.matmul(Mbb_inv,np.matmul(bins,nself.Mll))
+        Mbl = np.matmul(Mbb_inv,np.matmul(bins,self.Mll))
         return(Mbl)
         #
     def W(self,l,debug=False):
