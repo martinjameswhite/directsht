@@ -187,5 +187,5 @@ class MaskDeconvolution:
         :param Cb: 1D array containing the binned Cls
         :return: 1D array containing the mode-decoupled bandpowers
         """
-        return( np.matmul(Cb,Minv) )
+        return( np.dot(Minv, Cb))
         #
