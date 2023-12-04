@@ -60,7 +60,7 @@ class MaskDeconvolution:
             Clx = np.pad(Cl,(0,self.Nl-len(Cl)),'constant',constant_values=0)
         elif len(Cl)>self.Nl:
             Clx = Cl[:self.Nl]
-        else
+        else:
             Clx = Cl
         # Get the inverse bin-bin mode-coupling matrix.
         Mbb_inv = self.get_Mbb_inv(bins)
