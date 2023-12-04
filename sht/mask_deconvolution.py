@@ -100,7 +100,7 @@ class MaskDeconvolution:
         # Get the inverse binned matrix
         Mbb_inv = self.get_Mbb_inv(bins)
         # Bin the theory Cl's.
-        Mbl = np.matmul(Mbb_inv,np.matmul(bins,self.Mll))
+        Mbl = np.dot(Mbb_inv,np.dot(bins,self.Mll))
         return(Mbl)
         #
     def W(self,l,debug=False):
@@ -148,7 +148,7 @@ class MaskDeconvolution:
         bins_no_wt = np.zeros_like(bins)
         bins_no_wt[bins>0] = 1.0
         # Bin the mode-coupling matrix into those bins.
-        Mbb = np.matmul(np.matmul(bins,self.Mll),bins_no_wt.T)
+        Mbb = np.dot(np.dot(bins,self.Mll),bins_no_wt.T)
         # Invert the binned matrix
         Mbb_inv = np.linalg.inv(Mbb)
         return(Mbb_inv)
