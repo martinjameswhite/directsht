@@ -150,7 +150,7 @@ class MaskDeconvolution:
         Mbb_inv = np.linalg.inv(Mbb)
         return(Mbb_inv)
         #
-    def binning_matrix(self,type='linear',step=16):
+    def binning_matrix(self,type='linear',start=16,step=16):
         """
         Returns a 'binning matrix', B, such that B.vec is a binned
         version of vec.  This is a "helper" function.
@@ -168,7 +168,7 @@ class MaskDeconvolution:
         else:
             raise RuntimeError("Unknown step type.")
         ii = 0
-        l0 = 2 # Remove monopole and dipole.
+        l0 = start
         l1 = l0 + dell(l0)
         while l1<=Nl:
             bins[ii,l0:min(l1,Nl)] = 1/float(l1-l0)
