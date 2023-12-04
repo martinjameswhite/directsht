@@ -51,6 +51,9 @@ class MaskDeconvolution:
         :param C_l: 1D numpy array of length self.lmax+1.
                     Per-ell angular power spectrum of the signal.
         :param bins: An Nbin x Nell matrix to perform the binning.
+                    It helps to have an additional bin on either end that is
+                    computed but not used, just to avoid edge effects with
+                    the mode decoupling, etc.
         :return: tuple of (1D numpy array, 1D numpy array). The first array contains
                     the ells at which the bandpowers are computed. The second array
                     contains the mode-decoupled bandpowers.
