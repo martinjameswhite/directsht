@@ -9,19 +9,20 @@ from scipy.special import roots_legendre, eval_legendre
 
 class LogNormalMocks:
     def __init__(self, Npnt, nside=2048, lmax=1000, 
-                 clg=None, norm=0.1, alpha=2., ell0=10.,
+                 clg=None, norm=0.01, alpha=2., ell0=10.,
                  theta_range=(0, np.pi), phi_range=(0, 2 * np.pi), verbose=False):
         """
         Generate a lognormal catalog of sources with some masking
         :param Npnt: int. Number of points in the catalog
         :param nside: int. Healpix nside parameter
-        :param clg: 1D numpy array. Angular power spectrum of the Gaussian field.
-        :param verbose: bool. Whether to print out information about the catalog
-        :param alpha: float. Power law index of the (Gaussian) angular power spectrum
         :param lmax: int. Maximum ell for the angular power spectrum
+        :param clg: 1D numpy array. Angular power spectrum of the Gaussian field.
+        :param norm: float. Normalization of the default (Gaussian) power spectrum.
+        :param alpha: float. Power law index of the (Gaussian) angular power spectrum
         :param ell0: float. The knee of the default Gaussian angular power spectrum
         :param theta_range: tuple of floats btw (0, np.pi). The range of theta to allow
         :param phi_range: tuple of floats btw (0, 2 * np.pi). The range of theta to allow
+        :param verbose: bool. Whether to print out information about the catalog
         """
         self.Npnt        = Npnt
         self.nside       = nside
