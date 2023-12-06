@@ -3,7 +3,7 @@
 
 import numpy as np
 import healpy as hp
-
+from scipy.special import roots_legendre, eval_legendre
 
 
 
@@ -69,7 +69,7 @@ class LogNormalMocks:
         blur = np.sqrt(hp.pixelfunc.nside2pixarea(self.nside))
         thta += blur * self.rng.uniform(low=-0.5,high=0.5,size=thta.size)
         phi  += blur * self.rng.uniform(low=-0.5,high=0.5,size=thta.size)
-        return ((thta,phi,wt))
+        return( (thta,phi,wt) )
         #
     def make_mask(self, thetas, phis):
         """
@@ -79,5 +79,63 @@ class LogNormalMocks:
         :return: The indices of the catalog that are in the observed region
         """
         # Cut to the "observed region"
-        return (np.nonzero((thetas > self.theta_range[0]) & (thetas < self.theta_range[1]) & \
-                        (phis >  self.phi_range[0]) & (phis < self.phi_range[1]))[0])
+        return( np.nonzero((thetas > self.theta_range[0]) & (thetas < self.theta_range[1]) & \
+                        (phis >  self.phi_range[0]) & (phis < self.phi_range[1]))[0] )
+
+    def get_theory_Cl(self, lmax_out=None, gauss_order=1000):
+        """
+        Get the theory Cl's for the log-normal mocks
+        :param lmax_out: int.
+            Maximum ell to compute the Cl's for. Defaults to lmax of Gaussian field in exponent
+        :param gauss_order: int.
+            Order of Gauss-Legendre quadrature to use in integration.
+        :return: np.ndarray.
+            1D numpy array of shape (lmax+1) containing the lognormal Cl's
+        """
+        if lmax_out is None:
+            lmax_out = len(self.clg)-1
+        # Get nodes and weights for Gauss-Legendre quadrature
+        xs, weights = roots_legendre(gauss_order)
+        # Compute the correlation function of the Gaussian field
+        gauss_corrfunc = get_corrfunc_from_Cl(self.clg, xs)
+        # Compute the correlation function of the lognormal field
+        ln_corrfunc = np.exp(gauss_corrfunc) - 1
+        # Compute the Cl's of the lognormal field
+        ln_cls = get_Cl_from_corrfunc(ln_corrfunc, xs, weights, lmax_out)
+        return( ln_cls )
+
+def get_corrfunc_from_Cl(cls, xs):
+    """
+    Compute correlation function from Cl's
+    :param cls: np.ndarray.
+        1D numpy array containing Cl's at consecutive multipoles
+    :param xs: np.ndarray
+        1D numpy array with values [-1,1] at which to evaluate the correlation
+         function ( note that x=cos\theta ).
+    :return: np.ndarray.
+        correlation function C(\theta=arccos(xs))
+    """
+    corr_func = np.zeros_like(xs)
+    for ell, cl in enumerate(cls):
+        corr_func += (2*ell+1) * cl * eval_legendre(ell, xs)
+    return( corr_func/(4*np.pi) )
+
+def get_Cl_from_corrfunc(cf_at_xs, xs, weights, lmax):
+    """
+    Compute Cl's from correlation function using Gauss-Legendre quadrature
+    :param cf_at_xs: np.ndarray.
+        1D array containing the correlation function evaluated at xs i.e. C(\theta=arccos(xs))
+    :param xs: np.ndarray.
+        1D numpy array with values [-1,1]. The roots of the Legendre polynomial of order equal
+        to the order of our quadrature rule.
+    :param weights: np.ndarray.
+        1D numpy array with weights for the Gauss-Legendre quadrature
+    :param lmax: int.
+        Maximum ell to compute the Cl's for.
+    :return: np.ndarray.
+        1D numpy array of shape (lmax+1) containing the Cl's
+    """
+    cls = np.zeros(lmax+1)
+    for ell in range(lmax+1):
+        cls[ell] = np.dot(weights, cf_at_xs*eval_legendre(ell,xs) )
+    return( 2*np.pi*cls )
