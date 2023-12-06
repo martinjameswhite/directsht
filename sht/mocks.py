@@ -8,9 +8,9 @@ from scipy.special import roots_legendre, eval_legendre
 
 
 class LogNormalMocks:
-    def __init__(self, Npnt, nside=2048, clg=None, verbose=False,
-                 alpha=1.1, lmax=1000, ell0 = 10.,
-                 theta_range=(0, np.pi), phi_range=(0, 2 * np.pi)):
+    def __init__(self, Npnt, nside=2048, lmax=1000, 
+                 clg=None, norm=0.5, alpha=2., ell0=10.,
+                 theta_range=(0, np.pi), phi_range=(0, 2 * np.pi), verbose=False):
         """
         Generate a lognormal catalog of sources with some masking
         :param Npnt: int. Number of points in the catalog
@@ -31,7 +31,7 @@ class LogNormalMocks:
         #
         if clg is None:
             ell = np.arange(lmax)
-            self.clg = 0.001 * (ell0 / (ell + ell0))**alpha
+            self.clg = norm * (ell0/(ell+ell0))**alpha
         else:
             self.clg = clg
         # 
