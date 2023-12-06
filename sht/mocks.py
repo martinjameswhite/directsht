@@ -82,11 +82,13 @@ class LogNormalMocks:
         return( np.nonzero((thetas > self.theta_range[0]) & (thetas < self.theta_range[1]) & \
                         (phis >  self.phi_range[0]) & (phis < self.phi_range[1]))[0] )
 
-    def get_theory_Cl(self, lmax_out=None, gauss_order=1000):
+    def get_theory_Cl(self, lmax_out=None, shot_noise=True, gauss_order=1000):
         """
         Get the theory Cl's for the log-normal mocks
         :param lmax_out: int.
             Maximum ell to compute the Cl's for. Defaults to lmax of Gaussian field in exponent
+        :param shot_noise: bool.
+            Whether to include shot noise in the returned Cls. Default is True/yes.
         :param gauss_order: int.
             Order of Gauss-Legendre quadrature to use in integration.
         :return: np.ndarray.
@@ -102,7 +104,11 @@ class LogNormalMocks:
         ln_corrfunc = np.exp(gauss_corrfunc) - 1
         # Compute the Cl's of the lognormal field
         ln_cls = get_Cl_from_corrfunc(ln_corrfunc, xs, weights, lmax_out)
-        return( ln_cls )
+        if shot_noise:
+            sn = 1/float(self.Npnt) * (4*np.pi) # TODO: implement sth that allows for non-uniform weighting
+        else:
+            sn = 0
+        return( ln_cls + sn )
 
 def get_corrfunc_from_Cl(cls, xs):
     """
