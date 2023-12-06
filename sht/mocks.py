@@ -9,7 +9,7 @@ from scipy.special import roots_legendre, eval_legendre
 
 class LogNormalMocks:
     def __init__(self, Npnt, nside=2048, lmax=1000, 
-                 clg=None, norm=0.5, alpha=2., ell0=10.,
+                 clg=None, norm=0.2, alpha=2., ell0=10.,
                  theta_range=(0, np.pi), phi_range=(0, 2 * np.pi), verbose=False):
         """
         Generate a lognormal catalog of sources with some masking
