@@ -9,7 +9,7 @@ from scipy.special import roots_legendre, eval_legendre
 
 class LogNormalMocks:
     def __init__(self, Npnt, nside=2048, lmax=1000, 
-                 clg=None, norm=0.01, alpha=2., ell0=10.,
+                 clg=None, cl_ln=None, norm=0.01, alpha=2., ell0=10.,
                  theta_range=(0, np.pi), phi_range=(0, 2 * np.pi), verbose=False):
         """
         Generate a lognormal catalog of sources with some masking
@@ -17,6 +17,7 @@ class LogNormalMocks:
         :param nside: int. Healpix nside parameter
         :param lmax: int. Maximum ell for the angular power spectrum
         :param clg: 1D numpy array. Angular power spectrum of the Gaussian field.
+        :param cl_ln: 1D numpy array. Angular power spectrum of the lognormal field.
         :param norm: float. Normalization of the default (Gaussian) power spectrum.
         :param alpha: float. Power law index of the (Gaussian) angular power spectrum
         :param ell0: float. The knee of the default Gaussian angular power spectrum
@@ -24,17 +25,20 @@ class LogNormalMocks:
         :param phi_range: tuple of floats btw (0, 2 * np.pi). The range of theta to allow
         :param verbose: bool. Whether to print out information about the catalog
         """
+        assert (cl_ln is None) or (clg is None), "Cannot specify both cl_ln and clg"
         self.Npnt        = Npnt
         self.nside       = nside
         self.verbose     = verbose
         self.theta_range = theta_range
         self.phi_range   = phi_range
         #
-        if clg is None:
+        if cl_ln is not None:
+            self.clg = get_gauss_cl_from_ln_cl(cl_ln)
+        elif clg is not None:
+            self.clg = clg
+        else:
             ell = np.arange(lmax)
             self.clg = norm * (ell0/(ell+ell0))**alpha
-        else:
-            self.clg = clg
         # 
     def __call__(self, seed=None, verbose=True):
         """
@@ -146,3 +150,9 @@ def get_Cl_from_corrfunc(cf_at_xs, xs, weights, lmax):
     for ell in range(lmax+1):
         cls[ell] = np.dot(weights, cf_at_xs*eval_legendre(ell,xs) )
     return( 2*np.pi*cls )
+
+def get_gauss_cl_from_ln_cl(ln_cl, gauss_order=1000):
+    xs, weights = roots_legendre(gauss_order)
+    ln_corrfunc = get_corrfunc_from_Cl(ln_cl, xs)
+    gauss_corrfunc = np.log(ln_corrfunc + 1)
+    return get_Cl_from_corrfunc(gauss_corrfunc, xs, weights, len(ln_cl)-1)
