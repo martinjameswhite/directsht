@@ -152,6 +152,15 @@ def get_Cl_from_corrfunc(cf_at_xs, xs, weights, lmax):
     return( 2*np.pi*cls )
 
 def get_gauss_cl_from_ln_cl(ln_cl, gauss_order=1000):
+    """
+    Compute the Cl's of the Gaussian field from the Cl's of the lognormal field
+    :param ln_cl: np.ndarray.
+        1D numpy array containing the Cl's of the lognormal field
+    :param gauss_order: int.
+        Order of Gauss-Legendre quadrature to use in integration.
+    :return: np.ndarray.
+        1D numpy array of same length as ln_cl with the Cl's of the Gaussian field
+    """
     xs, weights = roots_legendre(gauss_order)
     ln_corrfunc = get_corrfunc_from_Cl(ln_cl, xs)
     gauss_corrfunc = np.log(ln_corrfunc + 1)
