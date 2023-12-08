@@ -17,11 +17,11 @@ from  threej000 import Wigner3j
 class MaskDeconvolution:
     def __init__(self,Nl,W_l,verbose=True):
         """
-        Class to deconvolve the mode-coupling of pseudo-Cls.
+        Class to manage the mode-coupling of pseudo-Cls.
 
         It computes the necessary Wigner 3j symbols and mode-coupling matrix on
         initialization so that they do not have to be recomputed on successive calls
-        to mode-decouple the pseudo-Cls of noise-debiased bandpowers.
+        to mode-decouple/renormalize the pseudo-Cls of bandpowers.
 
         :param Nl: int. The number of multipoles to compute the mode-coupling matrix for.
                         The maximum ell, lmax, is Nl-1.
@@ -45,7 +45,7 @@ class MaskDeconvolution:
         # Compute the mode-coupling matrix
         self.Mll = self.get_M()
         #
-    def __call__(self,Cl,bins):
+    def __call__(self,Cl,bins,mode='deconvolution'):
         """
         Compute the mode-decoupled bandpowers given some binning scheme.
         :param C_l: 1D numpy array of length self.lmax+1.
@@ -54,6 +54,11 @@ class MaskDeconvolution:
                     It helps to have an additional bin on either end that is
                     computed but not used, just to avoid edge effects with
                     the mode decoupling, etc.
+        :param mode: str. 'deconvolution' (default) or 'normalization'.
+            - 'deconvolution' follows the standard MASTER approach of multiplying
+                by the inverse, binned mode-coupling matrix.
+            - 'normalization' follows the approach of Baleato Lizancos & White 23
+                and normalizes the pseudo-Cls by a factor that leaves shot noise unchanged
         :return: tuple of (1D numpy array, 1D numpy array). The first array contains
                     the ells at which the bandpowers are computed. The second array
                     contains the mode-decoupled bandpowers.
@@ -65,43 +70,77 @@ class MaskDeconvolution:
             Clx = Cl[:self.Nl]
         else:
             Clx = Cl
-        # Get the inverse bin-bin mode-coupling matrix.
-        Mbb_inv = self.get_Mbb_inv(bins)
         # Bin the Cls.
         Cb = np.dot(bins,Clx)
-        # Mode-decouple the bandpowers
-        Cb_decoupled = self.decouple_Cls(Mbb_inv,Cb)
         # Compute the binned ells.
         binned_ells = np.dot(bins,np.arange(self.Nl))/np.sum(bins,axis=1)
-        return( (binned_ells,Cb_decoupled) )
         #
-    def convolve_theory_Cls(self,Clt,bins):
+        if mode=='deconvolution':
+            # Get the inverse bin-bin mode-coupling matrix.
+            Mbb_inv = self.get_Mbb_inv(bins)
+            # Mode-decouple the bandpowers
+            Cb_decoupled = self.decouple_Cls(Mbb_inv,Cb)
+            return( (binned_ells,Cb_decoupled) )
+        elif mode=='normalization':
+            # Compute the normalization factor
+            norm = self.compute_normalization_factor()
+            # Return normalized bandpowers
+            return( (binned_ells,norm*Cb) )
+        else:
+            raise RuntimeError("Unknown mode. Must be 'deconvolution' or 'normalization'.")
+        #
+    def compute_normalization_factor(self):
+        """
+        Compute the normalization factor that leaves shot noise unchanged.
+        :return: float. The normalization factor.
+        """
+        ells = np.arange(len(self.W_l))
+        return np.sum(self.W_l*(2*ells+1))/(4*np.pi)
+
+    def convolve_theory_Cls(self,Clt,bins,mode='deconvolution'):
         """
         Convolve some theory Cls with the bandpower window function
         :param Clt: 1D numpy array of length self.lmax+1. Theory Cls
         :param bins: An Nbin x Nell matrix to perform the binning.
+        :param mode: str. 'deconvolution' (default) or 'normalization'.
+            - 'deconvolution' follows the standard MASTER approach of multiplying
+                by the inverse, binned mode-coupling matrix.
+            - 'normalization' follows the approach of Baleato Lizancos & White 23
+                and normalizes the pseudo-Cls by a factor that leaves shot noise unchanged
         :return: 1D numpy array
         """
         assert (len(Clt)>=self.Nl), ("Clt must be provided up to lmax")
-        # Get the window matrix.
-        Mbl = self.window_matrix(bins)
-        Cb_decoupled = np.dot(Mbl,Clt[:self.Nl])
         # Compute the binned ells.
-        binned_ells = np.dot(bins,np.arange(self.Nl))/np.sum(bins,axis=1)
-        return( (binned_ells,Cb_decoupled) )
+        binned_ells = np.dot(bins, np.arange(self.Nl)) / np.sum(bins, axis=1)
+        # Get the window matrix.
+        Mbl = self.window_matrix(bins,mode)
+        return( (binned_ells,np.dot(Mbl,Clt[:self.Nl])) )
         #
-    def window_matrix(self,bins):
+    def window_matrix(self,bins,mode='deconvolution'):
         """
         Returns the window matrix that converts a theory C_l into the
         binned and decoupled pseudo-spectra.
         :param bins: An Nbin x Nell matrix to perform the binning.
+        :param mode: str. 'deconvolution' (default) or 'normalization'.
+            - 'deconvolution' follows the standard MASTER approach of multiplying
+                by the inverse, binned mode-coupling matrix.
+            - 'normalization' follows the approach of Baleato Lizancos & White 23
+                and normalizes the pseudo-Cls by a factor that leaves shot noise unchanged
         :return 2D numpy array
         """
-        # Get the inverse binned matrix
-        Mbb_inv = self.get_Mbb_inv(bins)
-        # Bin the theory Cl's.
-        Mbl = np.dot(Mbb_inv,np.dot(bins,self.Mll))
-        return(Mbl)
+        if mode=='deconvolution':
+            # Get the inverse binned matrix
+            Mbb_inv = self.get_Mbb_inv(bins)
+            # Bin the theory Cl's.
+            Mbl = np.dot(Mbb_inv,np.dot(bins,self.Mll))
+        elif mode=='normalization':
+            # Compute the normalization factor
+            norm = self.compute_normalization_factor()
+            # Bin the theory Cl's.
+            Mbl = norm*np.dot(bins,self.Mll)
+        else:
+            raise RuntimeError("Unknown mode. Must be 'deconvolution' or 'normalization'.")
+        return (Mbl)
         #
     def W(self,l,debug=False):
         """
