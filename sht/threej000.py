@@ -94,6 +94,8 @@ class Wigner3j:
         timing tests."""
         store = np.zeros((self.Nl*(self.Nl+1)*(self.Nl+2))//6,dtype='float64')+1e42
         for j1 in range(self.Nl):
+            store[self.get_index(j1,j1,0)] = (-1.)**j1/np.sqrt(2*j1+1.)
+        for j1 in range(self.Nl):
             for j2 in range(j1 + 1):
                 for j3 in range(j2 + 1):
                     threej000(j1, j2, j3, store)
