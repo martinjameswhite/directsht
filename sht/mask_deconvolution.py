@@ -61,7 +61,7 @@ class MaskDeconvolution:
                 and normalizes the pseudo-Cls by a factor that leaves shot noise unchanged
         :return: tuple of (1D numpy array, 1D numpy array). The first array contains
                     the ells at which the bandpowers are computed. The second array
-                    contains the mode-decoupled bandpowers.
+                    contains the mode-decoupled (or normalized) bandpowers.
         """
         # Adjust the length of the input Cl.
         if len(Cl)<self.Nl:
@@ -95,7 +95,8 @@ class MaskDeconvolution:
         :return: float. The normalization factor.
         """
         ells = np.arange(len(self.W_l))
-        return np.sum(self.W_l*(2*ells+1))/(4*np.pi)
+        norm =  np.sum(self.W_l*(2*ells+1))/(4*np.pi)
+        return (1./norm)
 
     def convolve_theory_Cls(self,Clt,bins,mode='deconvolution'):
         """
