@@ -3,8 +3,9 @@ import numpy as np
 
 try:
     jax_present = True
-    from jax import jit, device_put
+    from jax import jit
     import jax.numpy as jnp
+    move_to_device = lambda x: x  # Dummy definition for fallback
 except ImportError:
     jax_present = False
     print("JAX not found. Falling back to NumPy.")
@@ -31,8 +32,8 @@ def get_vs(mmax, phi_data_reshaped, reshaped_inputs, loop_in_JAX=False):
         if loop_in_JAX:
             return get_vs_jax(mmax, phi_data_reshaped, reshaped_inputs)
         else:
-            # Run loop in numpy and move to GPU memory at the end
-            return [device_put(vs) for vs in get_vs_np(mmax, phi_data_reshaped, reshaped_inputs)]
+            # Run loop in numpy and move to GPU (possibly distributed) memory at the end
+            return [move_to_device(vs) for vs in get_vs_np(mmax, phi_data_reshaped, reshaped_inputs)]
     else:
         return get_vs_np(mmax, phi_data_reshaped, reshaped_inputs)
 #@jit
