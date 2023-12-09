@@ -175,7 +175,7 @@ class DirectSHT:
             reshaped_inputs = utils.reshape_aux_array([w_i_sorted*input_ for input_ in
                                                       [(2*t+1)*(1-t)**2,t*(1-t)**2,t**2*(3-2*t)
                                                           ,t**2*(t-1)]], transitions, bin_num, bin_len)
-            reshaped_inputs = move_to_device(mask * reshaped_inputs)
+            reshaped_inputs = move_to_device(mask * reshaped_inputs, axis=1)
 
             # Query only theta bins that have data. While we're at it, scale derivatives by dx
             Yv_i_short = self.Yv[:, occupied_bins]; Yv_ip1_short = self.Yv[:, occupied_bins+1]
@@ -197,6 +197,11 @@ class DirectSHT:
                 print("Precomputing vs took ",t2-t1," seconds.",flush=True)
             #
             if jax_present:
+                # Remove the padding needed to shard
+                remainder_in_bins = bin_num % N_devices
+                if remainder_in_bins != 0:
+                    # Remove the padding
+                    vs_real, vs_imag = [vs[:, -(N_devices - remainder_in_bins), :] for vs in [vs_real, vs_imag]]
                 # Rearrange by m value of every a_lm index.
                 # This is rather memory-inefficient, but it makes it very easy to
                 # batch over with JAX's vmap. For lmax=500, each vs_* is O(1GB). For

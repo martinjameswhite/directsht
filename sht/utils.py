@@ -90,7 +90,7 @@ def getlm(lmax, szalm, i=None):
         l = i - m * (2 * lmax + 1 - m) // 2
     return (l, m)
 
-def move_to_device(arr, verbose=False):
+def move_to_device(arr, verbose=False, axis=0):
     '''
     Helper function to distribute an array across devices.
     :param arr: np.ndarray
@@ -100,16 +100,25 @@ def move_to_device(arr, verbose=False):
         Whether to visualize the sharding scheme. Only works for !d2D arrays.
     :return:
     '''
+    if axis==1:
+        assert len(arr.shape) == 3, "Can only split along axis=1 for 3D arrays"
     # Initialize sharding scheme
     sharding = PositionalSharding(mesh_utils.create_device_mesh(N_devices))
     # Is the dimension divisible by the number of devices?
     remainder = arr.shape[0] % N_devices
     if remainder != 0:
-        # Zero-pad the zeroth dimension of the array to be divisible by len(jax.devices())
-        arr = np.pad(arr,((0, N_devices-remainder), (0,0)), mode='constant', constant_values=0)
+        if axis==0:
+            # Zero-pad the zeroth dimension of the array to be divisible by len(jax.devices())
+            arr = np.pad(arr,((0, N_devices-remainder), (0,0)), mode='constant', constant_values=0)
+        elif axis==1 and len(arr.shape) == 3:
+            # Zero-pad the first dimension of the array to be divisible by len(jax.devices())
+            arr = np.pad(arr,((0, 0), (0,N_devices-remainder), (0, 0)), mode='constant', constant_values=0)
     # Initialize the sharding scheme with as many devices as there are available
     if len(arr.shape) == 3:
-        sharding_reshaped = sharding.reshape(N_devices, 1, 1)
+        if axis == 0:
+            sharding_reshaped = sharding.reshape(N_devices, 1, 1)
+        elif axis == 1:
+            sharding_reshaped = sharding.reshape(1, N_devices, 1)
         # Visualizing the sharding is not supported for 3D arrays
         verbose=False
     elif len(arr.shape) == 2:
