@@ -14,10 +14,12 @@ from scipy.stats import mode
 
 try:
     jax_present = True
-    from   jax import device_put, vmap, jit
+    from   jax import vmap, jit
+    from jax.sharding import PositionalSharding
+    from utils import move_to_device
 except ImportError:
     jax_present = False
-    device_put = lambda x: x  # Dummy definition for fallback
+    move_to_device = lambda x: x  # Dummy definition for fallback
     print("JAX not found. Falling back to NumPy.")
 
 
@@ -165,21 +167,21 @@ class DirectSHT:
             # computation of the v's. Our binning scheme involves zero-padding bins with fewer
             # than bin_len points, but cos(0)=1!=0, so we need a mask to discard spurious zeros!
             mask = utils.reshape_phi_array(np.ones_like(phi_data_sorted), transitions, bin_num, bin_len)
-            # Mask and put in GPU memory
-            reshaped_phi_data = device_put(mask * utils.reshape_phi_array(phi_data_sorted,
+            # Mask and put in GPU memory, distributing across devices if possible
+            reshaped_phi_data = move_to_device(mask * utils.reshape_phi_array(phi_data_sorted,
                                                                           transitions, bin_num, bin_len))
-            # Repeat the process for  the other required inputs
+            # Repeat the process for the other required inputs
             reshaped_inputs = utils.reshape_aux_array([w_i_sorted*input_ for input_ in
                                                       [(2*t+1)*(1-t)**2,t*(1-t)**2,t**2*(3-2*t)
                                                           ,t**2*(t-1)]], transitions, bin_num, bin_len)
-            reshaped_inputs = device_put(mask * reshaped_inputs)
+            reshaped_inputs = move_to_device(mask * reshaped_inputs)
 
             # Query only theta bins that have data. While we're at it, scale derivatives by dx
             Yv_i_short = self.Yv[:, occupied_bins]; Yv_ip1_short = self.Yv[:, occupied_bins+1]
             dYv_i_short = dx*self.Yd[:, occupied_bins]; dYv_ip1_short = dx*self.Yd[:, occupied_bins+1]
-            # If JAX is available, move big arrays to GPU
-            Yv_i_short = device_put(Yv_i_short); Yv_ip1_short = device_put(Yv_ip1_short)
-            dYv_i_short = device_put(dYv_i_short); dYv_ip1_short = device_put(dYv_ip1_short)
+            # If JAX is available, move big arrays to GPU, sharding them if several devices are available
+            Yv_i_short = move_to_device(Yv_i_short); Yv_ip1_short = move_to_device(Yv_ip1_short)
+            dYv_i_short = move_to_device(dYv_i_short); dYv_ip1_short = move_to_device(dYv_ip1_short)
 
             #
             t15 = time.time()

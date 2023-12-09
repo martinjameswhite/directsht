@@ -1,4 +1,12 @@
 import numpy as np
+try:
+    jax_present = True
+    import jax
+    from jax.sharding import PositionalSharding
+    from jax.experimental import mesh_utils
+except ImportError:
+    jax_present = False
+    print("JAX not found. Falling back to NumPy.")
 
 default_dtype = None # Replace if you want to use a different dtype from the env default
 
@@ -80,3 +88,33 @@ def getlm(lmax, szalm, i=None):
         ).astype(int)
         l = i - m * (2 * lmax + 1 - m) // 2
     return (l, m)
+
+def move_to_device(arr, verbose=False):
+    '''
+    Helper function to distribute an array across devices.
+    :param arr: np.ndarray
+        The array to be distributed. The splitting distribution is done
+         across its zeroth dimension.
+    :param verbose: bool
+        Whether to visualize the sharding scheme. Only works for !d2D arrays.
+    :return:
+    '''
+    # Initialize sharding scheme
+    sharding = PositionalSharding(mesh_utils.create_device_mesh(len(jax.devices())))
+    # Zero-pad the zeroth dimension of the array to be divisible by len(jax.devices())
+    arr = np.pad(arr,(0,arr.shape[0] % len(jax.devices())), mode='constant', constant_values=0)
+    # Initialize the sharding scheme with as many devices as there are available
+    if len(arr.shape) == 3:
+        sharding_reshaped = sharding.reshape(len(jax.devices()), 1, 1)
+        # Visualizing the sharding is not supported for 3D arrays
+        verbose=False
+    elif len(arr.shape) == 2:
+        sharding_reshaped = sharding.reshape(len(jax.devices()), 1)
+    else:
+        sharding_reshaped = sharding
+    # Distribute the array across devices
+    arr = jax.device_put(arr, sharding_reshaped)
+    if verbose:
+        # Visualize the sharding
+        jax.debug.visualize_array_sharding(arr)
+    return arr
