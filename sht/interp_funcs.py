@@ -28,13 +28,10 @@ def get_vs(mmax, phi_data_reshaped, reshaped_inputs, loop_in_JAX=False):
     :return: a tuple of two 3D numpy arrays of shape (mmax+1, 4, bin_num) with the real and
             imaginary parts of the v's at each m.
     """
-    if jax_present:
-        if loop_in_JAX:
-            return get_vs_jax(mmax, phi_data_reshaped, reshaped_inputs)
-        else:
-            # Run loop in numpy and move to GPU (possibly distributed) memory at the end
-            return [move_to_device(vs) for vs in get_vs_np(mmax, phi_data_reshaped, reshaped_inputs)]
+    if jax_present and loop_in_JAX:
+        return get_vs_jax(mmax, phi_data_reshaped, reshaped_inputs)
     else:
+        # Run loop in numpy and possibly move to GPU later
         return get_vs_np(mmax, phi_data_reshaped, reshaped_inputs)
 #@jit
 def get_vs_np(mmax, phi_data_reshaped, reshaped_inputs):

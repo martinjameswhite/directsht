@@ -200,7 +200,7 @@ class DirectSHT:
                 # This is rather memory-inefficient, but it makes it very easy to
                 # batch over with JAX's vmap. For lmax=500, each vs_* is O(1GB). For
                 # lmax=1000, each vs_* is O(4GB). We might want to consider alternatives
-                vs_real, vs_imag = [vs[m_ordering, :, :] for vs in [vs_real, vs_imag]]
+                vs_real, vs_imag = [move_to_device(vs[m_ordering, :, :]) for vs in [vs_real, vs_imag]]
                 # Get a grid of all alm's by batching over (ell,m) -- best run on a GPU!
                 get_all_alms_w_jax = vmap(jit(interp.get_alm_jax),in_axes=(0,0,0,0,0))
                 # Notice we've put the Ylm and dYlm tables in device memory for a speed boost

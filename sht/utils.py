@@ -101,8 +101,11 @@ def move_to_device(arr, verbose=False):
     '''
     # Initialize sharding scheme
     sharding = PositionalSharding(mesh_utils.create_device_mesh(len(jax.devices())))
-    # Zero-pad the zeroth dimension of the array to be divisible by len(jax.devices())
-    arr = np.pad(arr,(0,arr.shape[0] % len(jax.devices())), mode='constant', constant_values=0)
+    # Is the dimension divisible by the number of devices?
+    remainder = arr.shape[0] % len(jax.devices())
+    if remainder != 0:
+        # Zero-pad the zeroth dimension of the array to be divisible by len(jax.devices())
+        arr = np.pad(arr,(0, len(jax.devices())-remainder), mode='constant', constant_values=0)
     # Initialize the sharding scheme with as many devices as there are available
     if len(arr.shape) == 3:
         sharding_reshaped = sharding.reshape(len(jax.devices()), 1, 1)
