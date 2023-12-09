@@ -59,24 +59,35 @@ class LogNormalMocks:
         """
         gmap = hp.synfast(self.clg, self.nside, alm=False, pol=False)
         if verbose:
-            print("gmap in range ({:e},{:e})".format(np.min(gmap), np.max(gmap)))
+            print("gmap in range ({:e},{:e})".format(np.min(gmap),np.max(gmap)))
         emap = np.exp(gmap)
-        emap*= self.Npnt / np.sum(emap)
-        if verbose:
-            print("emap in range ({:e},{:e})".format(np.min(emap), np.max(emap)))
-        ngal = self.rng.poisson(lam=emap, size=emap.size)
-        # Since, by assumption, Npnt<<Npix we have 0 or 1 objects per pixel.
-        ipix     = np.nonzero(ngal > 0)[0]
-        thta,phi = hp.pix2ang(self.nside,ipix,lonlat=False)
-        wt       = np.ones_like(thta)
-        # Now very slightly perturb the positions away from
-        # the pixel centers.
-        blur = np.sqrt(hp.pixelfunc.nside2pixarea(self.nside))
-        thta += blur * self.rng.uniform(low=-0.5,high=0.5,size=thta.size)
-        phi  += blur * self.rng.uniform(low=-0.5,high=0.5,size=thta.size)
-        return( (thta,phi,wt) )
+        smap = np.sum(emap)
+        mmax = np.max(emap)
+        idone= 0
+        imax = int(2e-4 * 12*self.nside**2) # Most points in any iteration.
+        tlst,plst,wlst = np.array([]),np.array([]),np.array([])
+        while idone<self.Npnt:
+            itry = min(imax,self.Npnt-idone)
+            fact = float(itry)/smap
+            if verbose:
+                print("scaling factor {:e}, maxprob={:e}".format(fact,fact*mmax))
+            ngal = self.rng.poisson(lam=fact*emap,size=emap.size)
+            # Since, by assumption, Npnt<<Npix we have 0 or 1 objects per pixel.
+            ipix     = np.nonzero(ngal > 0)[0]
+            thta,phi = hp.pix2ang(self.nside,ipix,lonlat=False)
+            wt       = np.ones_like(thta)
+            # Now very slightly perturb the positions away from
+            # the pixel centers.
+            blur   = np.sqrt(hp.pixelfunc.nside2pixarea(self.nside))
+            thta  += blur * self.rng.uniform(low=-0.5,high=0.5,size=thta.size)
+            phi   += blur * self.rng.uniform(low=-0.5,high=0.5,size=phi.size)
+            tlst   = np.append(tlst,thta)
+            plst   = np.append(plst,phi)
+            wlst   = np.append(wlst,wt)
+            idone += itry
+        return( (tlst,plst,wlst) )
         #
-    def make_mask(self, thetas, phis):
+    def make_mask(self,thetas,phis):
         """
         Make a mask for the catalog
         :param thetas: Full-sky array of theta values
