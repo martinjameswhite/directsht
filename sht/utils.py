@@ -4,7 +4,7 @@ try:
     import jax
     from jax.sharding import PositionalSharding
     from jax.experimental import mesh_utils
-    N_devices = 1#len(jax.devices())
+    N_devices = len(jax.devices())
 except ImportError:
     jax_present = False
     print("JAX not found. Falling back to NumPy.")
@@ -105,11 +105,14 @@ def move_to_device(arr, verbose=False, axis=0):
     # Initialize sharding scheme
     sharding = PositionalSharding(mesh_utils.create_device_mesh(N_devices))
     # Is the dimension divisible by the number of devices?
-    remainder = arr.shape[0] % N_devices
+    remainder = arr.shape[axis] % N_devices
     if remainder != 0:
         if axis==0:
-            # Zero-pad the zeroth dimension of the array to be divisible by len(jax.devices())
-            arr = np.pad(arr,((0, N_devices-remainder), (0,0)), mode='constant', constant_values=0)
+            if len(arr.shape) == 2:
+                # Zero-pad the zeroth dimension of the array to be divisible by len(jax.devices())
+                arr = np.pad(arr,((0, N_devices-remainder), (0,0)), mode='constant', constant_values=0)
+            if len(arr.shape) == 3:
+                arr = np.pad(arr,((0,N_devices-remainder), (0, 0), (0, 0)), mode='constant', constant_values=0)
         elif axis==1 and len(arr.shape) == 3:
             # Zero-pad the first dimension of the array to be divisible by len(jax.devices())
             arr = np.pad(arr,((0, 0), (0,N_devices-remainder), (0, 0)), mode='constant', constant_values=0)
@@ -125,7 +128,7 @@ def move_to_device(arr, verbose=False, axis=0):
         sharding_reshaped = sharding.reshape(N_devices, 1)
     else:
         sharding_reshaped = sharding
-    # Distribute the array across devices
+
     arr = jax.device_put(arr, sharding_reshaped)
     if verbose:
         # Visualize the sharding

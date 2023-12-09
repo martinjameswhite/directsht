@@ -17,7 +17,7 @@ try:
     from   jax import vmap, jit, devices
     from jax.sharding import PositionalSharding
     from utils import move_to_device
-    N_devices = 1#len(devices())
+    N_devices = len(devices())
 except ImportError:
     jax_present = False
     move_to_device = lambda x: x  # Dummy definition for fallback
@@ -201,7 +201,7 @@ class DirectSHT:
                 remainder_in_bins = bin_num % N_devices
                 if remainder_in_bins != 0:
                     # Remove the padding
-                    vs_real, vs_imag = [vs[:, -(N_devices - remainder_in_bins), :] for vs in [vs_real, vs_imag]]
+                    vs_real, vs_imag = [vs[:, :, :-(N_devices - remainder_in_bins)] for vs in [vs_real, vs_imag]]
                 # Rearrange by m value of every a_lm index.
                 # This is rather memory-inefficient, but it makes it very easy to
                 # batch over with JAX's vmap. For lmax=500, each vs_* is O(1GB). For
