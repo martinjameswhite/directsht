@@ -105,7 +105,7 @@ def move_to_device(arr, verbose=False):
     remainder = arr.shape[0] % len(jax.devices())
     if remainder != 0:
         # Zero-pad the zeroth dimension of the array to be divisible by len(jax.devices())
-        arr = np.pad(arr,(0, len(jax.devices())-remainder), mode='constant', constant_values=0)
+        arr = np.pad(arr,((0, len(jax.devices())-remainder), (0,0)), mode='constant', constant_values=0)
     # Initialize the sharding scheme with as many devices as there are available
     if len(arr.shape) == 3:
         sharding_reshaped = sharding.reshape(len(jax.devices()), 1, 1)

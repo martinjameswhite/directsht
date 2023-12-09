@@ -14,7 +14,7 @@ from scipy.stats import mode
 
 try:
     jax_present = True
-    from   jax import vmap, jit
+    from   jax import vmap, jit, devices
     from jax.sharding import PositionalSharding
     from utils import move_to_device
 except ImportError:
@@ -210,6 +210,10 @@ class DirectSHT:
                                                    dYv_i_short, dYv_ip1_short, vs_imag)
                 alm_grid = (np.array(alm_grid_real, dtype='complex128')
                             - 1j *np.array(alm_grid_imag, dtype='complex128'))
+                remainder = len(ell_ordering) % len(devices())
+                if remainder != 0:
+                    # Remove the padding
+                    alm_grid = alm_grid[:-(len(devices())-remainder)]
             else:
                 # JIT compile the get_alm function
                 get_alm_jitted = nb.jit(nopython=True)(interp.get_alm_np)
