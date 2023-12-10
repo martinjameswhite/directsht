@@ -200,7 +200,7 @@ class DirectSHT:
                 vs_real, vs_imag = [utils.unpad(vs, bin_num, axis=2) for vs in [vs_real, vs_imag]]
                 # Rearrange by m value of every a_lm index. This is rather memory-inefficient,
                 # but it makes it very easy to batch over using JAX's vmap
-                vs_real, vs_imag = [move_to_device(vs[m_ordering, :, :]) for vs in [vs_real, vs_imag]]
+                vs_real, vs_imag = [vs[m_ordering, :, :] for vs in [vs_real, vs_imag]]
                 # Get a grid of all alm's by batching over (ell,m) -- best run on a GPU!
                 get_all_alms_w_jax = vmap(jit(interp.get_alm_jax),in_axes=(0,0,0,0,0))
                 #

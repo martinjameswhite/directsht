@@ -3,7 +3,7 @@ import numpy as np
 
 try:
     jax_present = True
-    from jax import jit
+    from jax import jit, vmap
     import jax.numpy as jnp
 except ImportError:
     jax_present = False
@@ -13,7 +13,7 @@ except ImportError:
 
 default_dtype = None # Replace if you want to use a different dtype from the env default
 
-def get_vs(mmax, phi_data_reshaped, reshaped_inputs, loop_in_JAX=False):
+def get_vs(mmax, phi_data_reshaped, reshaped_inputs, loop_in_JAX=True):
     """
     Wrapper function for get_vs_np and get_vs_jax. Defaults to JAX version when JAX is present.
     :param mmax: int. Maximum m value in the calculation
@@ -28,7 +28,9 @@ def get_vs(mmax, phi_data_reshaped, reshaped_inputs, loop_in_JAX=False):
             imaginary parts of the v's at each m.
     """
     if jax_present and loop_in_JAX:
-        return get_vs_jax(mmax, phi_data_reshaped, reshaped_inputs)
+        #return get_vs_jax(mmax, phi_data_reshaped, reshaped_inputs)
+        get_vs_at_m_mapped = vmap(jit(get_vs_at_m), in_axes=(0,None,None))
+        return get_vs_at_m_mapped(jnp.arange(mmax+1), phi_data_reshaped, reshaped_inputs)
     else:
         # Run loop in numpy and possibly move to GPU later
         return get_vs_np(mmax, phi_data_reshaped, reshaped_inputs)
