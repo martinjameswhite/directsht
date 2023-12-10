@@ -19,7 +19,7 @@ try:
     from utils import move_to_device
 except ImportError:
     jax_present = False
-    move_to_device = lambda x: x  # Dummy definition for fallback
+    move_to_device = lambda x, **kwargs: x  # Dummy definition for fallback
     print("JAX not found. Falling back to NumPy.")
 
 

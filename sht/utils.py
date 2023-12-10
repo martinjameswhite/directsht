@@ -174,3 +174,19 @@ def unpad(arr, unpadded_len, axis=0):
     else:
         # No need for unpadding
         return arr
+
+def predict_memory_usage(num_elements, dtype):
+    '''
+    Predict the memory usage of an array of a given size and dtype
+    :param num_elements: int.
+        The number of elements in the array
+    :param dtype: np.dtype
+        The dtype of the array
+    :return: float
+        The predicted memory usage in bytes
+    '''
+    # Get the size of each element in bytes
+    element_size = dtype.itemsize
+    # Calculate total memory usage in bytes
+    total_memory = element_size * num_elements
+    return total_memory
