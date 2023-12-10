@@ -200,7 +200,7 @@ class DirectSHT:
                 # but it makes it very easy to batch over using JAX's vmap.
                 # While we're at it, we remove zero-padding along the last dimension and apply
                 # it along the zeroth dimension. (Reminder: the padding enables sharding)
-                vs_real, vs_imag = [utils.pad_to_shard(vs[m_ordering][:, :, np.arange(bin_num, dtype=int)])
+                vs_real, vs_imag = [utils.pad_to_shard(vs[:, :, np.arange(bin_num, dtype=int)][m_ordering])
                                     for vs in [vs_real, vs_imag]]
                 # Get a grid of all alm's by batching over (ell,m) -- best run on a GPU!
                 get_all_alms_w_jax = vmap(jit(interp.get_alm_jax),in_axes=(0,0,0,0,0))
