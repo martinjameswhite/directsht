@@ -110,11 +110,7 @@ def move_to_device(arr, axis=0, verbose=False):
 
     # If needed, zero-pad the array so that its length along the sharded dimension
     # is divisible by the number of devices we're distributing across
-    remainder = arr.shape[axis] % N_devices
-    if remainder != 0:
-        pad_width = [(0, 0)] * arr.ndim
-        pad_width[axis] = (0, N_devices - remainder)
-        arr = np.pad(arr, pad_width, mode='constant', constant_values=0)
+    arr = pad_to_shard(arr, axis)
 
     # Reshape sharding scheme based on array dimensions
     if len(arr.shape) == 3:
@@ -130,6 +126,30 @@ def move_to_device(arr, axis=0, verbose=False):
         # Visualize the sharding
         jax.debug.visualize_array_sharding(arr)
     return arr
+
+def pad_to_shard(arr, axis=0):
+    '''
+    Pad an array with zeros so that its length along the sharded dimension is
+    divisible by the number of devices we're distributing across
+    :param arr: np.ndarray
+        The array to be padded (if necessary)
+    :param axis: int. (optional)
+        The axis along which to pad the array. Defaults to 0.
+    :return: np.ndarray
+        The array with the padding added (if necessary)
+    '''
+    remainder = arr.shape[axis] % N_devices
+    if remainder != 0:
+        pad_width = [(0, 0)] * arr.ndim
+        pad_width[axis] = (0, N_devices - remainder)
+        if isinstance(arr, np.ndarray):
+            return np.pad(arr, pad_width, mode='constant', constant_values=0)
+        elif isinstance(arr, jax.numpy.ndarray):
+            return jax.numpy.pad(arr, pad_width, mode='constant', constant_values=0)
+        else:
+            raise TypeError("Input array must be a numpy or JAX array")
+    else:
+        return arr
 
 def unpad(arr, unpadded_len, axis=0):
     '''
