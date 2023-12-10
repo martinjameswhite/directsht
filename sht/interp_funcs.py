@@ -5,7 +5,6 @@ try:
     jax_present = True
     from jax import jit
     import jax.numpy as jnp
-    move_to_device = lambda x: x  # Dummy definition for fallback
 except ImportError:
     jax_present = False
     print("JAX not found. Falling back to NumPy.")

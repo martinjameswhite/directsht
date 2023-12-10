@@ -17,7 +17,6 @@ try:
     from   jax import vmap, jit, devices
     from jax.sharding import PositionalSharding
     from utils import move_to_device
-    N_devices = len(devices())
 except ImportError:
     jax_present = False
     move_to_device = lambda x: x  # Dummy definition for fallback
@@ -197,29 +196,23 @@ class DirectSHT:
                 print("Precomputing vs took ",t2-t1," seconds.",flush=True)
             #
             if jax_present:
-                # Remove the padding needed to shard
-                remainder_in_bins = bin_num % N_devices
-                if remainder_in_bins != 0:
-                    # Remove the padding
-                    vs_real, vs_imag = [vs[:, :, :-(N_devices - remainder_in_bins)] for vs in [vs_real, vs_imag]]
-                # Rearrange by m value of every a_lm index.
-                # This is rather memory-inefficient, but it makes it very easy to
-                # batch over with JAX's vmap. For lmax=500, each vs_* is O(1GB). For
-                # lmax=1000, each vs_* is O(4GB). We might want to consider alternatives
+                # If we introduced padding to shard, remove it
+                vs_real, vs_imag = [utils.unpad(vs, bin_num, axis=2) for vs in [vs_real, vs_imag]]
+                # Rearrange by m value of every a_lm index. This is rather memory-inefficient,
+                # but it makes it very easy to batch over using JAX's vmap
                 vs_real, vs_imag = [move_to_device(vs[m_ordering, :, :]) for vs in [vs_real, vs_imag]]
                 # Get a grid of all alm's by batching over (ell,m) -- best run on a GPU!
                 get_all_alms_w_jax = vmap(jit(interp.get_alm_jax),in_axes=(0,0,0,0,0))
-                # Notice we've put the Ylm and dYlm tables in device memory for a speed boost
+                #
                 alm_grid_real = get_all_alms_w_jax(Yv_i_short, Yv_ip1_short,
                                                    dYv_i_short, dYv_ip1_short, vs_real)
                 alm_grid_imag = get_all_alms_w_jax(Yv_i_short, Yv_ip1_short,
                                                    dYv_i_short, dYv_ip1_short, vs_imag)
+                # Combine real and imaginary parts of the alms
                 alm_grid = (np.array(alm_grid_real, dtype='complex128')
                             - 1j *np.array(alm_grid_imag, dtype='complex128'))
-                remainder = len(ell_ordering) % N_devices
-                if remainder != 0:
-                    # Remove the padding
-                    alm_grid = alm_grid[:-(N_devices-remainder)]
+                # If we introduced padding when sharding, remove it
+                alm_grid = utils.unpad(alm_grid, len(ell_ordering))
             else:
                 # JIT compile the get_alm function
                 get_alm_jitted = nb.jit(nopython=True)(interp.get_alm_np)

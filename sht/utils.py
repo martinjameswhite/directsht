@@ -4,9 +4,11 @@ try:
     import jax
     from jax.sharding import PositionalSharding
     from jax.experimental import mesh_utils
+    # Choose the number of devices we'll be parallelizing across
     N_devices = len(jax.devices())
 except ImportError:
     jax_present = False
+    N_devices = 1
     print("JAX not found. Falling back to NumPy.")
 
 default_dtype = None # Replace if you want to use a different dtype from the env default
@@ -90,42 +92,36 @@ def getlm(lmax, szalm, i=None):
         l = i - m * (2 * lmax + 1 - m) // 2
     return (l, m)
 
-def move_to_device(arr, verbose=False, axis=0):
+def move_to_device(arr, axis=0, verbose=False):
     '''
-    Helper function to distribute an array across devices.
+    Helper function to shard (i.e. distribute) an array across devices.
     :param arr: np.ndarray
-        The array to be distributed. The splitting distribution is done
-         across its zeroth dimension.
+        The array to be sharded
+    :param axis: int
+        The axis along which to shard the array
     :param verbose: bool
         Whether to visualize the sharding scheme. Only works for !d2D arrays.
     :return:
     '''
     if axis==1:
-        assert len(arr.shape) == 3, "Can only split along axis=1 for 3D arrays"
+        assert len(arr.shape) == 3, "Only sharding along axis=1 is supported for 3D arrays"
     # Initialize sharding scheme
     sharding = PositionalSharding(mesh_utils.create_device_mesh(N_devices))
-    # Is the dimension divisible by the number of devices?
+
+    # If needed, zero-pad the array so that its length along the sharded dimension
+    # is divisible by the number of devices we're distributing across
     remainder = arr.shape[axis] % N_devices
     if remainder != 0:
-        if axis==0:
-            if len(arr.shape) == 2:
-                # Zero-pad the zeroth dimension of the array to be divisible by len(jax.devices())
-                arr = np.pad(arr,((0, N_devices-remainder), (0,0)), mode='constant', constant_values=0)
-            if len(arr.shape) == 3:
-                arr = np.pad(arr,((0,N_devices-remainder), (0, 0), (0, 0)), mode='constant', constant_values=0)
-        elif axis==1 and len(arr.shape) == 3:
-            # Zero-pad the first dimension of the array to be divisible by len(jax.devices())
-            arr = np.pad(arr,((0, 0), (0,N_devices-remainder), (0, 0)), mode='constant', constant_values=0)
-    # Initialize the sharding scheme with as many devices as there are available
+        pad_width = [(0, 0)] * arr.ndim
+        pad_width[axis] = (0, N_devices - remainder)
+        arr = np.pad(arr, pad_width, mode='constant', constant_values=0)
+
+    # Reshape sharding scheme based on array dimensions
     if len(arr.shape) == 3:
-        if axis == 0:
-            sharding_reshaped = sharding.reshape(N_devices, 1, 1)
-        elif axis == 1:
-            sharding_reshaped = sharding.reshape(1, N_devices, 1)
-        # Visualizing the sharding is not supported for 3D arrays
-        verbose=False
+        sharding_reshaped = sharding.reshape((N_devices, 1, 1) if axis == 0 else (1, N_devices, 1))
+        verbose = False  # Visualizing sharding is not supported for 3D arrays
     elif len(arr.shape) == 2:
-        sharding_reshaped = sharding.reshape(N_devices, 1)
+        sharding_reshaped = sharding.reshape((N_devices, 1))
     else:
         sharding_reshaped = sharding
 
@@ -134,3 +130,27 @@ def move_to_device(arr, verbose=False, axis=0):
         # Visualize the sharding
         jax.debug.visualize_array_sharding(arr)
     return arr
+
+def unpad(arr, unpadded_len, axis=0):
+    '''
+    Remove the padding we applied to enable sharding, first checking whether
+    it's nececessary
+    :param arr: np.ndarray
+        The array to be unpadded (if necessary)
+    :param unpadded_len: int.
+        The length of the dimension prior to padding
+    :param axis: int. (optional)
+        The axis along which to unpad the array. Defaults to 0.
+    :return: np.ndarray
+        The array with the padding removed (if necessary)
+    '''
+    # Check whether the length of the original array was divisible by the number
+    # of devices we're using. This tells us whether we had the need to zero-pad
+    # in order to shard the array, and therefore whether we need to unpad now.
+    remainder = unpadded_len % N_devices
+    if remainder != 0:
+        # Remove the padding
+        return arr.take(range(unpadded_len), axis=axis)
+    else:
+        # No need for unpadding
+        return arr
