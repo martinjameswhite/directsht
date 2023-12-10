@@ -175,25 +175,25 @@ class DirectSHT:
                                                       [(2*t+1)*(1-t)**2,t*(1-t)**2,t**2*(3-2*t)
                                                           ,t**2*(t-1)]], transitions, bin_num, bin_len)
             reshaped_inputs = move_to_device(mask * reshaped_inputs, axis=1)
-
-            # Query only theta bins that have data. While we're at it, scale derivatives by dx
-            Yv_i_short = self.Yv[:, occupied_bins]; Yv_ip1_short = self.Yv[:, occupied_bins+1]
-            dYv_i_short = dx*self.Yd[:, occupied_bins]; dYv_ip1_short = dx*self.Yd[:, occupied_bins+1]
-            # If JAX is available, move big arrays to GPU, sharding them if several devices are available
-            Yv_i_short = move_to_device(Yv_i_short); Yv_ip1_short = move_to_device(Yv_ip1_short)
-            dYv_i_short = move_to_device(dYv_i_short); dYv_ip1_short = move_to_device(dYv_ip1_short)
-
             #
             t15 = time.time()
             if verbose: print("Digitizing & reshaping took ",t15-t1," seconds.",flush=True)
             #
             # Precompute the v's
             vs_real, vs_imag = interp.get_vs(self.Nell-1, reshaped_phi_data, reshaped_inputs)
-
             #
             t2 = time.time()
-            if verbose:
-                print("Precomputing vs took ",t2-t1," seconds.",flush=True)
+            if verbose: print("Precomputing vs took ",t2-t1," seconds.",flush=True)
+            #
+            t25 = time.time()
+            # Query only theta bins that have data. While we're at it, scale derivatives by dx
+            Yv_i_short = self.Yv[:, occupied_bins]; Yv_ip1_short = self.Yv[:, occupied_bins+1]
+            dYv_i_short = dx*self.Yd[:, occupied_bins]; dYv_ip1_short = dx*self.Yd[:, occupied_bins+1]
+            # If JAX is available, move big arrays to GPU, sharding them if several devices are available
+            Yv_i_short = move_to_device(Yv_i_short); Yv_ip1_short = move_to_device(Yv_ip1_short)
+            dYv_i_short = move_to_device(dYv_i_short); dYv_ip1_short = move_to_device(dYv_ip1_short)
+            t3 = time.time()
+            if verbose: print("Moving to GPU took ",t3-t25," seconds.",flush=True)
             #
             if jax_present:
                 # Rearrange by m value of every a_lm index. This is rather memory-inefficient,
@@ -226,9 +226,9 @@ class DirectSHT:
                     alm_grid[i] = get_alm_jitted(Ylm_i, Ylm_ip1, dYlm_i, dYlm_ip1, vs_tot, m)
             # For x<0, we need to multiply by (-1)^{ell-m}
             alm_grid_tot += par_fact * alm_grid
-            t3 = time.time()
+            t4 = time.time()
             if verbose:
-                print("Computing alm's took ",t3-t2," seconds.",flush=True)
+                print("Computing alm's took ",t4-t3," seconds.",flush=True)
         return(alm_grid_tot/reg_factor)
         #
     def indx(self,ell,m):
