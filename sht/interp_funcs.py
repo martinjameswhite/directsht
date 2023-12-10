@@ -15,7 +15,7 @@ except ImportError:
 
 default_dtype = None # Replace if you want to use a different dtype from the env default
 
-def get_vs(mmax, phi_data_reshaped, reshaped_inputs, loop_in_JAX=True, N_chunks=None, verbose=False):
+def get_vs(mmax, phi_data_reshaped, reshaped_inputs, loop_in_JAX=True, N_chunks=None, verbose=True):
 
     """
     Wrapper function for get_vs_np and get_vs_jax. Defaults to JAX version when JAX is present.
@@ -38,7 +38,8 @@ def get_vs(mmax, phi_data_reshaped, reshaped_inputs, loop_in_JAX=True, N_chunks=
         # Run loop in numpy and possibly move to GPU later
         return get_vs_np(mmax, phi_data_reshaped, reshaped_inputs)
     else:
-        if verbose: print('This is how much memory we have available: ', psutil.virtual_memory().available/1e9)
+        if verbose: print('\nSome info on the computation of the vs:')
+        if verbose: print('This is how much memory we have available: ', psutil.virtual_memory().available/1e9, 'GB')
         if N_chunks is None:
             # How much memory does vmap ideally want to calculate the vs_real and vs_imag?
             tot_memory = 2*utils.predict_memory_usage((mmax+1)*reshaped_inputs.size,
@@ -47,7 +48,7 @@ def get_vs(mmax, phi_data_reshaped, reshaped_inputs, loop_in_JAX=True, N_chunks=
             # What fraction of the available memory do we want to use?
             max_mem_frac = 0.9
             if verbose: print('We will be using ',max_mem_frac,' of the available memory')
-            N_chunks = int(np.floor(tot_memory/(max_mem_frac*psutil.virtual_memory().available)))
+            N_chunks = int(np.ceil(tot_memory/(max_mem_frac*psutil.virtual_memory().available)))
 
         # Calculate the padding we will need to make the vectorized dimension divisible by chunks
         if (mmax+1)%N_chunks == 0:
@@ -57,7 +58,8 @@ def get_vs(mmax, phi_data_reshaped, reshaped_inputs, loop_in_JAX=True, N_chunks=
             N_chunks += 1
 
         if verbose: print('We will be breaking the computation into ',N_chunks,' chunks')
-        if verbose: print('Note we have padded to add: ',padding,' elements')
+        if verbose: print('Note: because of our padding, ', padding/(mmax+1+padding),
+                          ' of our calculations are useless\n')
 
         # Vectorize and JIT-compile the function
         get_vs_at_m_mapped = vmap(jit(get_vs_at_m), in_axes=(0,None,None))
