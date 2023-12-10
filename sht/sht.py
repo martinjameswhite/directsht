@@ -140,6 +140,14 @@ class DirectSHT:
                              [neg_idx])
         else:
             raise ValueError("The theta array seems to be empty!")
+
+        # If working on GPU, move arrays to device. While we're at it, scale derivatives by dx
+        tm2 = time.time()
+        self.Yv = move_to_device(self.Yv)
+        self.Yd = move_to_device(dx*self.Yd)
+        tm1 = time.time()
+        if verbose: print("Moving to GPU took ", tm1 - tm2, " seconds.", flush=True)
+
         #
         # Treat +ve and -ve x separately
         for x, par_fact, idx in which_case:
@@ -185,16 +193,6 @@ class DirectSHT:
             t2 = time.time()
             if verbose: print("Precomputing vs took ",t2-t1," seconds.",flush=True)
             #
-            t25 = time.time()
-            # Query only theta bins that have data. While we're at it, scale derivatives by dx
-            Yv_i_short = self.Yv[:, occupied_bins]; Yv_ip1_short = self.Yv[:, occupied_bins+1]
-            dYv_i_short = dx*self.Yd[:, occupied_bins]; dYv_ip1_short = dx*self.Yd[:, occupied_bins+1]
-            # If JAX is available, move big arrays to GPU, sharding them if several devices are available
-            Yv_i_short = move_to_device(Yv_i_short); Yv_ip1_short = move_to_device(Yv_ip1_short)
-            dYv_i_short = move_to_device(dYv_i_short); dYv_ip1_short = move_to_device(dYv_ip1_short)
-            t3 = time.time()
-            if verbose: print("Moving to GPU took ",t3-t25," seconds.",flush=True)
-            #
             if jax_present:
                 # Rearrange by m value of every a_lm index. This is rather memory-inefficient,
                 # but it makes it very easy to batch over using JAX's vmap.
@@ -205,10 +203,10 @@ class DirectSHT:
                 # Get a grid of all alm's by batching over (ell,m) -- best run on a GPU!
                 get_all_alms_w_jax = vmap(jit(interp.get_alm_jax),in_axes=(0,0,0,0,0))
                 #
-                alm_grid_real = get_all_alms_w_jax(Yv_i_short, Yv_ip1_short,
-                                                   dYv_i_short, dYv_ip1_short, vs_real)
-                alm_grid_imag = get_all_alms_w_jax(Yv_i_short, Yv_ip1_short,
-                                                   dYv_i_short, dYv_ip1_short, vs_imag)
+                alm_grid_real = get_all_alms_w_jax(self.Yv[:, occupied_bins], self.Yv[:, occupied_bins+1],
+                                                   self.Yd[:, occupied_bins], self.Yd[:, occupied_bins+1], vs_real)
+                alm_grid_imag = get_all_alms_w_jax(self.Yv[:, occupied_bins], self.Yv[:, occupied_bins+1],
+                                                   self.Yd[:, occupied_bins], self.Yd[:, occupied_bins+1], vs_imag)
                 # Combine real and imaginary parts of the alms
                 alm_grid = (np.array(alm_grid_real, dtype='complex128')
                             - 1j *np.array(alm_grid_imag, dtype='complex128'))
@@ -218,17 +216,18 @@ class DirectSHT:
                 # JIT compile the get_alm function
                 get_alm_jitted = nb.jit(nopython=True)(interp.get_alm_np)
                 #
-                alm_grid = np.zeros(len(Yv_i_short[:,0]), dtype='complex128')
+                alm_grid = np.zeros(len(self.Yv[:, occupied_bins][:,0]), dtype='complex128')
                 vs_tot = vs_real - 1j * vs_imag
                 #TODO: parallelize this
                 for i, (Ylm_i, Ylm_ip1, dYlm_i, dYlm_ip1, m) in \
-                  enumerate(zip(Yv_i_short, Yv_ip1_short, dYv_i_short, dYv_ip1_short,m_ordering)):
+                  enumerate(zip(self.Yv[:, occupied_bins], self.Yv[:, occupied_bins+1],
+                                self.Yd[:, occupied_bins], self.Yd[:, occupied_bins+1],m_ordering)):
                     alm_grid[i] = get_alm_jitted(Ylm_i, Ylm_ip1, dYlm_i, dYlm_ip1, vs_tot, m)
             # For x<0, we need to multiply by (-1)^{ell-m}
             alm_grid_tot += par_fact * alm_grid
-            t4 = time.time()
+            t3 = time.time()
             if verbose:
-                print("Computing alm's took ",t4-t3," seconds.",flush=True)
+                print("Computing alm's took ",t3-t2," seconds.",flush=True)
         return(alm_grid_tot/reg_factor)
         #
     def indx(self,ell,m):

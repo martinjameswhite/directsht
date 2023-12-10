@@ -15,7 +15,7 @@ except ImportError:
 
 default_dtype = None # Replace if you want to use a different dtype from the env default
 
-def get_vs(mmax, phi_data_reshaped, reshaped_inputs, loop_in_JAX=True, N_chunks=None, verbose=True):
+def get_vs(mmax, phi_data_reshaped, reshaped_inputs, loop_in_JAX=True, N_chunks=None, verbose=False):
 
     """
     Wrapper function for get_vs_np and get_vs_jax. Defaults to JAX version when JAX is present.
