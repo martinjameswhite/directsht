@@ -81,11 +81,11 @@ def get_vs(mmax, phi_data_reshaped, reshaped_inputs, loop_in_JAX=True, N_chunks=
         vs_real_stacked, vs_imag_stacked = tuple(zip(*chunked_vs))
         # Concatenate the batches
         vs_real, vs_imag = [jnp.concatenate(vs_stacked) for vs_stacked in [vs_real_stacked, vs_imag_stacked]]
-        # Remove the padding if necessary
+        #
         if pad:
-            return vs_real[np.arange(mmax+1, dtype=int),:,:], vs_imag[np.arange(mmax+1, dtype=int),:,:]
-        else:
-            return vs_real, vs_imag
+            # Remove the padding introduced in the current function
+            vs_real, vs_imag = vs_real[np.arange(mmax+1, dtype=int),:,:], vs_imag[np.arange(mmax+1, dtype=int),:,:]
+        return vs_real, vs_imag
 
 #@jit
 def get_vs_np(mmax, phi_data_reshaped, reshaped_inputs):
@@ -143,11 +143,14 @@ def get_alm_jax(Ylm_i, Ylm_ip1, dYlm_i, dYlm_ip1, vs):
     The key function: get alm by summing over all interpolated, weighted
     Y_lm's using JAX. Interpolation uses cubic Hermite splines
     :param Ylm_i: 1d numpy array of Ylm at sample indices i
+            IMPORTANT NOTE: the zeroth element of this array is the value of m
+            this is a hack to be able to pass the value of m through the vmap
     :param dYlm_i: 1d numpy array of first derivatives of Ylm at sample indices i
     :param Ylm_ip1: 1d numpy array of Ylm at sample indicesi+1
+            IMPORTANT NOTE: the zeroth element of this array is the value of m
+            this is a hack to be able to pass the value of m through the vmap
     :param dYlm_ip1: 1d numpy array of first derivatives of Ylm at sample indices i+1
-    :param vs: np array of size (Nsamples_theta,4) with the v_{i,j}(m) \
-               (at a fixed m) used in the direct_SHT algorithm
+    :param vs: jnp array of size (mmax+1,4,Nx) with the v_{i,j}(m)
     :return: a 1D numpy array with the alm value
     """
     # This is a hack to be able to pass the value of m through the vmap
