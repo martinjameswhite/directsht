@@ -198,6 +198,8 @@ class DirectSHT:
             if verbose: print("Precomputing vs took ",t2-t1," seconds.",flush=True)
             #
             if jax_present:
+                # Remove zero-padding introduced when sharding to calculate v's
+                vs_real, vs_imag = [vs[:, :, np.arange(bin_num, dtype=int)] for vs in [vs_real, vs_imag]]
                 # Get a grid of all alm's by batching over (ell,m) -- best run on a GPU!
                 get_all_alms_w_jax = vmap(jit(interp.get_alm_jax),in_axes=(0,0,0,0,None))
                 # Note that we use a hack to pass the m value through vmap as the first element of every row of Yv
