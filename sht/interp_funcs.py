@@ -15,24 +15,27 @@ except ImportError:
 
 default_dtype = None # Replace if you want to use a different dtype from the env default
 
-def get_vs(mmax, phi_data_reshaped, reshaped_inputs, loop_in_JAX=True, N_chunks=None, verbose=False):
-
+def get_vs(mmax, phi_data_reshaped, reshaped_inputs, loop_in_JAX=True, N_chunks=None,
+           pad=False, verbose=False):
     """
     Wrapper function for get_vs_np and get_vs_jax. Defaults to JAX version when JAX is present.
     :param mmax: int. Maximum m value in the calculation
     :param phi_data_reshaped: 2D numpy array of shape (bin_num, bin_len) with data phi values,
-            zero-padded to length bin_len in bins with fewer points
+        zero-padded to length bin_len in bins with fewer points
     :param reshaped_inputs: 2D numpy array of shape (4, bin_num, bin_len) with zero padding as
-            in phi_data_reshaped. The 1st dimension corresponds to the four auxiliary arrays in
-            the calculation of the v's.
+        in phi_data_reshaped. The 1st dimension corresponds to the four auxiliary arrays in
+        the calculation of the v's.
     :param loop_in_JAX: bool. Whether to loop over m in JAX or in NumPy. Defaults to False,
-            because JAX doesn't support in-place operations, so it's quite a bit slower
+        because JAX doesn't support in-place operations, so it's quite a bit slower
     :param N_chunks: int (optional). Number of chunks to break the vmap into if using JAX.
         This helps avoid memory issues. Must be a divisor of the number of (nonnegative) ms.
         Default is None, in which case the code will choose the highest value that won't
         exhaust the available memory.
+    :param pad: bool. Whether to pad the vectorized dimension to make it divisible by N_chunks.
+        By default (pad=False) we don't do this, and instead we split into the nearest number
+        of equal divisible chunks.
     :return: a tuple of two 3D numpy arrays of shape (mmax+1, 4, bin_num) with the real and
-            imaginary parts of the v's at each m.
+        imaginary parts of the v's at each m.
     """
     if not jax_present or not loop_in_JAX:
         # Run loop in numpy and possibly move to GPU later
@@ -47,20 +50,26 @@ def get_vs(mmax, phi_data_reshaped, reshaped_inputs, loop_in_JAX=True, N_chunks=
             if verbose: print('Ideally, vmap would want',tot_memory/1e9 ,'GB of memory')
             # What fraction of the available memory do we want to use?
             max_mem_frac = 0.9
-            if verbose: print('We will be using ',max_mem_frac,' of the available memory')
-            N_chunks = int(np.ceil(tot_memory/(max_mem_frac*psutil.virtual_memory().available)))
-
+            if verbose: print('We will be using at most',100*max_mem_frac,'% of the available memory')
+            rough_N_chunks = tot_memory/(max_mem_frac*psutil.virtual_memory().available)
+            #
+            if pad:
+                N_chunks = int(np.ceil(rough_N_chunks))
+            else:
+                # Find the divisors of the number of ms
+                divisors = np.arange(1, mmax+1 + 1)[(mmax+1) % np.arange(1, (mmax+1) + 1) == 0]
+                # Find the divisor that is closest to rough_N_chunks but larger
+                N_chunks = divisors[np.argmax(divisors >= rough_N_chunks)]
         # Calculate the padding we will need to make the vectorized dimension divisible by chunks
-        if (mmax+1)%N_chunks == 0:
-            padding = 0
-        else:
+        if pad and (mmax+1)%N_chunks != 0:
             padding = (N_chunks+1)*((mmax+1)//N_chunks) - (mmax+1)
             N_chunks += 1
-
+        else:
+            padding = 0
+        #
         if verbose: print('We will be breaking the computation into ',N_chunks,' chunks')
-        if verbose: print('Note: because of our padding, ', padding/(mmax+1+padding),
-                          ' of our calculations are useless\n')
-
+        if verbose: print('Note: because of our padding, ', 100*padding/(mmax+1+padding),
+                          '% of our calculations are useless\n')
         # Vectorize and JIT-compile the function
         get_vs_at_m_mapped = vmap(jit(get_vs_at_m), in_axes=(0,None,None))
         # Loop over batches to avoid memory issues
@@ -72,7 +81,11 @@ def get_vs(mmax, phi_data_reshaped, reshaped_inputs, loop_in_JAX=True, N_chunks=
         vs_real_stacked, vs_imag_stacked = tuple(zip(*chunked_vs))
         # Concatenate the batches
         vs_real, vs_imag = [jnp.concatenate(vs_stacked) for vs_stacked in [vs_real_stacked, vs_imag_stacked]]
-        return vs_real[np.arange(mmax+1, dtype=int),:,:], vs_imag[np.arange(mmax+1, dtype=int),:,:]
+        # Remove the padding if necessary
+        if pad:
+            return vs_real[np.arange(mmax+1, dtype=int),:,:], vs_imag[np.arange(mmax+1, dtype=int),:,:]
+        else:
+            return vs_real, vs_imag
 
 #@jit
 def get_vs_np(mmax, phi_data_reshaped, reshaped_inputs):
