@@ -143,7 +143,11 @@ class DirectSHT:
 
         # If working on GPU, move arrays to device. While we're at it, scale derivatives by dx
         tm2 = time.time()
-        self.Yv = move_to_device(self.Yv)
+        if jax_present:
+            # This is a hack to be able to pass the m value through vmap later on
+            self.Yv = move_to_device(np.insert(self.Yv, 0, m_ordering, axis=1))
+        else:
+            self.Yv = move_to_device(self.Yv)
         self.Yd = move_to_device(dx*self.Yd)
         tm1 = time.time()
         if verbose: print("Moving to GPU took ", tm1 - tm2, " seconds.", flush=True)
@@ -200,20 +204,25 @@ class DirectSHT:
                 # it along the zeroth dimension. (Reminder: the padding enables sharding)
                 # ToDO: Instantiate thesee arrays directly with the right sharding structure. Currently,
                 # we're instantiating them in all devices at once, which is a problem because they can be huge!
-                vs_real, vs_imag = [move_to_device(vs[:, :, np.arange(bin_num, dtype=int)][m_ordering])
-                                    for vs in [vs_real, vs_imag]]
+                vs_real, vs_imag = [vs[:, :, np.arange(bin_num, dtype=int)] for vs in [vs_real, vs_imag]]
                 # Get a grid of all alm's by batching over (ell,m) -- best run on a GPU!
-                get_all_alms_w_jax = vmap(jit(interp.get_alm_jax),in_axes=(0,0,0,0,0))
+                get_all_alms_w_jax = vmap(jit(interp.get_alm_jax),in_axes=(0,0,0,0,None))
                 #
-                alm_grid_real = get_all_alms_w_jax(self.Yv[:, occupied_bins], self.Yv[:, occupied_bins+1],
+                np.insert(occupied_bins+1,0,0)
+
+                alm_grid_real = get_all_alms_w_jax(self.Yv[:, np.insert(occupied_bins+1,0,0)],
+                                                   self.Yv[:, np.insert(occupied_bins+2,0,0)],
                                                    self.Yd[:, occupied_bins], self.Yd[:, occupied_bins+1], vs_real)
-                alm_grid_imag = get_all_alms_w_jax(self.Yv[:, occupied_bins], self.Yv[:, occupied_bins+1],
+                alm_grid_imag = get_all_alms_w_jax(self.Yv[:, np.insert(occupied_bins+1,0,0)],
+                                                   self.Yv[:, np.insert(occupied_bins+2,0,0)],
                                                    self.Yd[:, occupied_bins], self.Yd[:, occupied_bins+1], vs_imag)
                 # Combine real and imaginary parts of the alms
                 alm_grid = (np.array(alm_grid_real, dtype='complex128')
                             - 1j *np.array(alm_grid_imag, dtype='complex128'))
                 # If we introduced padding when sharding, remove it
                 alm_grid = utils.unpad(alm_grid, len(ell_ordering))
+                #Undo the hack
+                self.Yv = self.Yv[:,1:]
             else:
                 # JIT compile the get_alm function
                 get_alm_jitted = nb.jit(nopython=True)(interp.get_alm_np)

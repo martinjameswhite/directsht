@@ -150,8 +150,12 @@ def get_alm_jax(Ylm_i, Ylm_ip1, dYlm_i, dYlm_ip1, vs):
                (at a fixed m) used in the direct_SHT algorithm
     :return: a 1D numpy array with the alm value
     """
-    return(jnp.sum(Ylm_i*vs[0] + dYlm_i*vs[1]
-                   + Ylm_ip1*vs[2] + dYlm_ip1*vs[3]))
+    # This is a hack to be able to pass the value of m through the vmap
+    m = Ylm_i[0].astype(int)
+
+    # The actual values of the Ylm's are in the rest of the elemenets i.e. [1:]
+    return(jnp.sum(Ylm_i[1:]*vs[m,0] + dYlm_i*vs[m,1]
+                   + Ylm_ip1[1:]*vs[m,2] + dYlm_ip1*vs[m,3]))
 
 def get_alm_np(Ylm_i, Ylm_ip1, dYlm_i, dYlm_ip1, vs, m):
     """
