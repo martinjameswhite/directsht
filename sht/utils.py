@@ -107,11 +107,9 @@ def move_to_device(arr, axis=0, verbose=False):
         assert len(arr.shape) == 3, "Only sharding along axis=1 is supported for 3D arrays"
     # Initialize sharding scheme
     sharding = PositionalSharding(mesh_utils.create_device_mesh(N_devices))
-
     # If needed, zero-pad the array so that its length along the sharded dimension
     # is divisible by the number of devices we're distributing across
     arr = pad_to_shard(arr, axis)
-
     # Reshape sharding scheme based on array dimensions
     if len(arr.shape) == 3:
         sharding_reshaped = sharding.reshape((N_devices, 1, 1) if axis == 0 else (1, N_devices, 1))
@@ -120,7 +118,6 @@ def move_to_device(arr, axis=0, verbose=False):
         sharding_reshaped = sharding.reshape((N_devices, 1))
     else:
         sharding_reshaped = sharding
-
     arr = jax.device_put(arr, sharding_reshaped)
     if verbose:
         # Visualize the sharding

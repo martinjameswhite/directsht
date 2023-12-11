@@ -194,11 +194,13 @@ class DirectSHT:
             if verbose: print("Precomputing vs took ",t2-t1," seconds.",flush=True)
             #
             if jax_present:
-                # Rearrange by m value of every a_lm index. This is rather memory-inefficient,
-                # but it makes it very easy to batch over using JAX's vmap.
+                # Rearrange by m value of every a_lm index.
+                # ToDo: This is memory-inefficient, but it makes it very easy to batch over using JAX's vmap.
                 # While we're at it, we remove zero-padding along the last dimension and apply
                 # it along the zeroth dimension. (Reminder: the padding enables sharding)
-                vs_real, vs_imag = [utils.pad_to_shard(vs[:, :, np.arange(bin_num, dtype=int)][m_ordering])
+                # ToDO: Instantiate thesee arrays directly with the right sharding structure. Currently,
+                # we're instantiating them in all devices at once, which is a problem because they can be huge!
+                vs_real, vs_imag = [move_to_device(vs[:, :, np.arange(bin_num, dtype=int)][m_ordering])
                                     for vs in [vs_real, vs_imag]]
                 # Get a grid of all alm's by batching over (ell,m) -- best run on a GPU!
                 get_all_alms_w_jax = vmap(jit(interp.get_alm_jax),in_axes=(0,0,0,0,0))
