@@ -221,8 +221,6 @@ class DirectSHT:
                             - 1j *np.array(alm_grid_imag, dtype='complex128'))
                 # If we introduced padding when sharding, remove it
                 alm_grid = utils.unpad(alm_grid, len(ell_ordering))
-                #Undo the hack
-                self.Yv = self.Yv[:,1:]
             else:
                 # JIT compile the get_alm function
                 get_alm_jitted = nb.jit(nopython=True)(interp.get_alm_np)
@@ -239,6 +237,8 @@ class DirectSHT:
             t3 = time.time()
             if verbose:
                 print("Computing alm's took ",t3-t2," seconds.",flush=True)
+        # Undo the hack
+        self.Yv = self.Yv[:, 1:]
         return(alm_grid_tot/reg_factor)
         #
     def indx(self,ell,m):
