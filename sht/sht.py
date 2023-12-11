@@ -141,14 +141,14 @@ class DirectSHT:
         else:
             raise ValueError("The theta array seems to be empty!")
 
-        # If working on GPU, move arrays to device. While we're at it, scale derivatives by dx
+        # If working on GPU, move arrays to device.
         tm2 = time.time()
         if jax_present:
             # This is a hack to be able to pass the m value through vmap later on
             self.Yv = move_to_device(np.insert(self.Yv, 0, m_ordering, axis=1))
         else:
             self.Yv = move_to_device(self.Yv)
-        self.Yd = move_to_device(dx*self.Yd)
+        self.Yd = move_to_device(self.Yd)
         tm1 = time.time()
         if verbose: print("Moving to GPU took ", tm1 - tm2, " seconds.", flush=True)
 
@@ -203,12 +203,13 @@ class DirectSHT:
                 # Get a grid of all alm's by batching over (ell,m) -- best run on a GPU!
                 get_all_alms_w_jax = vmap(jit(interp.get_alm_jax),in_axes=(0,0,0,0,None))
                 # Note that we use a hack to pass the m value through vmap as the first element of every row of Yv
+                # We also scale derivatives by dx
                 alm_grid_real = get_all_alms_w_jax(self.Yv[:, np.insert(occupied_bins+1,0,0)],
                                                    self.Yv[:, np.insert(occupied_bins+2,0,0)],
-                                                   self.Yd[:, occupied_bins], self.Yd[:, occupied_bins+1], vs_real)
+                                                   dx*self.Yd[:, occupied_bins], dx*self.Yd[:, occupied_bins+1], vs_real)
                 alm_grid_imag = get_all_alms_w_jax(self.Yv[:, np.insert(occupied_bins+1,0,0)],
                                                    self.Yv[:, np.insert(occupied_bins+2,0,0)],
-                                                   self.Yd[:, occupied_bins], self.Yd[:, occupied_bins+1], vs_imag)
+                                                   dx*self.Yd[:, occupied_bins], dx*self.Yd[:, occupied_bins+1], vs_imag)
                 # Combine real and imaginary parts of the alms
                 alm_grid = (np.array(alm_grid_real, dtype='complex128')
                             - 1j *np.array(alm_grid_imag, dtype='complex128'))
@@ -221,9 +222,10 @@ class DirectSHT:
                 alm_grid = np.zeros(len(self.Yv[:, occupied_bins][:,0]), dtype='complex128')
                 vs_tot = vs_real - 1j * vs_imag
                 #TODO: parallelize this
+                #Note that we scale derivatives by dx
                 for i, (Ylm_i, Ylm_ip1, dYlm_i, dYlm_ip1, m) in \
                   enumerate(zip(self.Yv[:, occupied_bins], self.Yv[:, occupied_bins+1],
-                                self.Yd[:, occupied_bins], self.Yd[:, occupied_bins+1],m_ordering)):
+                                dx*self.Yd[:, occupied_bins], dx*self.Yd[:, occupied_bins+1],m_ordering)):
                     alm_grid[i] = get_alm_jitted(Ylm_i, Ylm_ip1, dYlm_i, dYlm_ip1, vs_tot, m)
             # For x<0, we need to multiply by (-1)^{ell-m}
             alm_grid_tot += par_fact * alm_grid
