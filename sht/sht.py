@@ -57,17 +57,18 @@ def compute_Plm_table(Nl,Nx,xmax):
         i0, i1 = indx(m, m), indx(m + 1, m)
         return Plm.at[i1[0], i1[1], :].set(jnp.sqrt(2 * m + 1.) * xx * Plm[i0[0], i0[1], :])
     #
-    @partial(jit, static_argnums=(0, 3), donate_argnums=(2,))
-    def ext_slow_recurrence(Nl, xx, Ylm, indx):
-        return vmap(partial_fun_Ylm, (0, None, None, None, None))(jnp.arange(0, Nl, dtype='int'), Ylm, indx, xx, Nl)
+    @jit #@partial(jit, static_argnums=(0, 3), donate_argnums=(2,))
+    def ext_slow_recurrence(xx, Ylm):
+        return vmap(partial_fun_Ylm, (0, None, None))(jnp.arange(0, Nl, dtype='int'), Ylm, xx)
     #
-    @partial(jit, static_argnums=(0, 2, 4), donate_argnums=(1,))
-    def partial_fun_Ylm(m, Ylm, indx, xx, Nl):
-        body_fun = lambda ell, Ylms: full_fun_Ylm(ell, m, Ylms, indx, xx)
-        return fori_loop(m + 2, Nl, body_fun, Ylm)
+    @jit #@partial(jit, static_argnums=(0, 2, 4), donate_argnums=(1,))
+    def partial_fun_Ylm(m, Ylm, xx):
+        body_fun = lambda ell, Ylms: full_fun_Ylm(ell, m, Ylms, xx)
+        return fori_loop(m + 2, Ylm.shape[0], body_fun, Ylm)
     #
-    @partial(jit, static_argnums=(0, 1, 3), donate_argnums=(2,))
-    def full_fun_Ylm(ell, m, Ylm, indx, xx):
+    @jit #@partial(jit, static_argnums=(0, 1, 3), donate_argnums=(2,))
+    def full_fun_Ylm(ell, m, Ylm, xx):
+        indx = lambda ell, m: (m, ell - m)
         i0, i1, i2 = indx(ell, m), \
             indx(ell - 1, m), \
             indx(ell - 2, m)
@@ -98,7 +99,7 @@ def compute_Plm_table(Nl,Nx,xmax):
     # Now do m=ell-1
     Plm = fori_loop(1, Nl-1, lambda m, Plms: get_misellm1(m, Plms, indx, xx), Plm)
     # Finally fill in ell>m+1:
-    Plm = ext_slow_recurrence(Nl,xx,Plm,indx)
+    Plm = ext_slow_recurrence(xx,Plm)
     return(Plm)
 
 @partial(jit, static_argnums=(0,1,2))
