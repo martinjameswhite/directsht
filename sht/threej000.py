@@ -43,6 +43,16 @@ def threej000(ell1,ell2,ell3,store):
     #
 
 @numba.jit(nopython=True)
+def fill_simple3j(store):
+    """Fill in the 'easy' values of 3j-000."""
+    for j1 in range(self.Nl):
+        ii (j1*(j1+1)*(j1+2))//6 + (j1*(j1+1))//2 + 0
+        store[ii] = (-1.)**j1/np.sqrt(2*j1+1.)
+    #
+
+
+
+@numba.jit(nopython=True)
 def get_index_jitted(l1,l2,l3):
     """
     Get the index of the Wigner 3j symbol (with m1=m2=m3=0) in the table.
@@ -93,8 +103,7 @@ class Wigner3j:
         """A loop to fill the 'store' array.  Can also be used for
         timing tests."""
         store = np.zeros((self.Nl*(self.Nl+1)*(self.Nl+2))//6,dtype='float64')+1e42
-        for j1 in range(self.Nl):
-            store[self.get_index(j1,j1,0)] = (-1.)**j1/np.sqrt(2*j1+1.)
+        fill_simple3j(store)
         for j1 in range(self.Nl):
             for j2 in range(j1 + 1):
                 for j3 in range(j2 + 1):
