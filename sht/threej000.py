@@ -48,6 +48,11 @@ def fill_simple3j(Nl,store):
     for j1 in range(Nl):
         ii = (j1*(j1+1)*(j1+2))//6 + (j1*(j1+1))//2 + 0
         store[ii] = (-1.)**j1/np.sqrt(2*j1+1.)
+    for j2 in range(1,Nl-1):
+        j1 = j2 + 1
+        j3 = 1
+        ii = (j1*(j1+1)*(j1+2))//6 + (j2*(j2+1))//2 + j3
+        store[ii] = -(-1.)**j2*np.sqrt( (j2+1.)/(2*j2+1.)/(2*j2+3.) )
     #
 
 
