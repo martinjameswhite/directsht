@@ -43,9 +43,9 @@ def threej000(ell1,ell2,ell3,store):
     #
 
 @numba.jit(nopython=True)
-def fill_simple3j(store):
+def fill_simple3j(Nl,store):
     """Fill in the 'easy' values of 3j-000."""
-    for j1 in range(self.Nl):
+    for j1 in range(Nl):
         ii (j1*(j1+1)*(j1+2))//6 + (j1*(j1+1))//2 + 0
         store[ii] = (-1.)**j1/np.sqrt(2*j1+1.)
     #
@@ -103,7 +103,7 @@ class Wigner3j:
         """A loop to fill the 'store' array.  Can also be used for
         timing tests."""
         store = np.zeros((self.Nl*(self.Nl+1)*(self.Nl+2))//6,dtype='float64')+1e42
-        fill_simple3j(store)
+        fill_simple3j(self.Nl,store)
         for j1 in range(self.Nl):
             for j2 in range(j1 + 1):
                 for j3 in range(j2 + 1):
