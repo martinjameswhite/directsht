@@ -46,7 +46,7 @@ def threej000(ell1,ell2,ell3,store):
 def fill_simple3j(Nl,store):
     """Fill in the 'easy' values of 3j-000."""
     for j1 in range(Nl):
-        ii (j1*(j1+1)*(j1+2))//6 + (j1*(j1+1))//2 + 0
+        ii = (j1*(j1+1)*(j1+2))//6 + (j1*(j1+1))//2 + 0
         store[ii] = (-1.)**j1/np.sqrt(2*j1+1.)
     #
 
