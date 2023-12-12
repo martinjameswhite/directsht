@@ -39,14 +39,12 @@ def ext_slow_recurrence(Nl,xx,Ylm,indx):
     order to use JIT this can not be part of the class, and we need
     to pass Nl,x,Ylm as arguments."""
     body_fun = lambda m, Ylms: partial_fun_Ylm(m, Ylm, indx, xx, Nl)
-    Ylm = fori_loop(0, Nl-1, body_fun, Ylm)
-    return(Ylm)
+    return fori_loop(0, Nl-1, body_fun, Ylm)
     #
 
 def partial_fun_Ylm(m, Ylm, indx, xx, Nl):
     body_fun = lambda ell, Ylms: full_fun_Ylm(ell, m, Ylms, indx, xx)
-    Ylm = fori_loop(m + 2, Nl, body_fun, Ylm)
-    return Ylm
+    return fori_loop(m + 2, Nl, body_fun, Ylm)
 
 def full_fun_Ylm(ell, m, Ylm, indx, xx):
     i0, i1, i2 = indx(ell, m), \
@@ -54,10 +52,9 @@ def full_fun_Ylm(ell, m, Ylm, indx, xx):
         indx(ell - 2, m)
     fact1, fact2 = jnp.sqrt((ell - m) * 1. / (ell + m)), \
         jnp.sqrt((ell - m - 1.) / (ell + m - 1.))
-    Ylm.at[i0, :].set((2 * ell - 1) * xx * Ylm[i1, :] - \
+    Ylm = Ylm.at[i0, :].set((2 * ell - 1) * xx * Ylm[i1, :] - \
                       (ell + m - 1) * Ylm[i2, :] * fact2)
-    Ylm.at[i0, :].multiply(fact1 / (ell - m))
-    return Ylm
+    return Ylm.at[i0, :].multiply(fact1 / (ell - m))
 
 
 #@partial(jit, static_argnums=(0,3))
@@ -66,26 +63,22 @@ def ext_der_slow_recurrence(Nl,xx,Yv,Yd, indx):
     derivatives."""
     omx2 = 1.0-xx**2
     body_fun = lambda ell, dYlm: partial_fun_dYlm(ell, Yv, dYlm, indx, xx, omx2)
-    Yd = fori_loop(0, Nl, body_fun, Yd)
-    return(Yd)
+    return fori_loop(0, Nl, body_fun, Yd)
     #
 
 def partial_fun_dYlm(ell, Yv, Yd, indx, xx, omx2):
     body_fun = lambda m, dYlm: full_fun_dYlm(ell, m, Yv, dYlm, indx, xx, omx2)
-    Yd = fori_loop(1, ell + 1, body_fun, Yd)
-    return Yd
+    return fori_loop(1, ell + 1, body_fun, Yd)
 
 def full_fun_dYlm(ell, m, Yv, Yd, indx, xx, omx2):
     i0, i1 = indx(ell, m), indx(ell - 1, m)
     fact = jnp.sqrt(1.0*(ell - m) / (ell + m))
-    Yd.at[i0, :].set((ell + m) * fact * Yv[i1, :] - ell * xx * Yv[i0, :])
-    Yd.at[i0, :].divide(omx2)
-    return Yd
+    Yd = Yd.at[i0, :].set((ell + m) * fact * Yv[i1, :] - ell * xx * Yv[i0, :])
+    return Yd.at[i0, :].divide(omx2)
 
 def full_norm(ell, m, Y, indx, fact):
     ii = indx(ell, m)
-    Y.at[ii, :].multiply(fact)
-    return Y
+    return Y.at[ii, :].multiply(fact)
 
 def partial_norm_func(ell, Yv, indx):
     fact = jnp.sqrt((2 * ell + 1) / 4. / np.pi)
@@ -95,25 +88,21 @@ def partial_norm_func(ell, Yv, indx):
 
 def get_mzeros(ell, Plm, indx, xx):
     i0, i1, i2 = indx(ell, 0), indx(ell - 1, 0), indx(ell - 2, 0)
-    Plm.at[i0, :].set((2 * ell - 1) * xx * Plm[i1, :] - (ell - 1) * Plm[i2, :])
-    Plm.at[i0, :].divide(1.0 * ell)
-    return Plm
+    Plm = Plm.at[i0, :].set((2 * ell - 1) * xx * Plm[i1, :] - (ell - 1) * Plm[i2, :])
+    return Plm.at[i0, :].divide(1.0 * ell)
 
 def get_mhigh(m, Plm, indx, sx):
     i0, i1 = indx(m, m), indx(m - 1, m - 1)
-    Plm.at[i0, :].set(-jnp.sqrt(1.0 - 1. / (2 * m)) * sx * Plm[i1, :])
-    return Plm
+    return Plm.at[i0, :].set(-jnp.sqrt(1.0 - 1. / (2 * m)) * sx * Plm[i1, :])
 
 def get_misellm1(m, Plm, indx, xx):
     i0, i1 = indx(m, m), indx(m + 1, m)
-    Plm.at[i1, :].set(jnp.sqrt(2 * m + 1.) * xx * Plm[i0, :])
-    return Plm
+    return Plm.at[i1, :].set(jnp.sqrt(2 * m + 1.) * xx * Plm[i0, :])
 
 
 def get_m0der(ell, Yd, indx, xx, Yv):
     i0, i1 = indx(ell, 0), indx(ell - 1, 0)
-    Yd.at[i0, :].set(ell / (1 - xx ** 2) * (Yv[i1, :] - xx * Yv[i0, :]))
-    return Yd
+    return Yd.at[i0, :].set(ell / (1 - xx ** 2) * (Yv[i1, :] - xx * Yv[i0, :]))
 
 class DirectSHT:
     """Brute-force spherical harmonic transforms."""
@@ -353,8 +342,8 @@ class DirectSHT:
         Plm = move_to_device(Plm)
         #
         # First we do the m=0 case.
-        Plm.at[self.indx(0,0),:].set(jnp.ones_like(xx))
-        Plm.at[self.indx(1, 0), :].set(xx.copy())
+        Plm= Plm.at[self.indx(0,0),:].set(jnp.ones_like(xx))
+        Plm = Plm.at[self.indx(1, 0), :].set(xx.copy())
         Plm = fori_loop(2, Nl, lambda ell, Plms: get_mzeros(ell, Plms, self.indx, xx), Plm)
         # Now we fill in m>0.
         # To keep the recurrences stable, we treat "high m" and "low m"
@@ -380,7 +369,7 @@ class DirectSHT:
         Yd = jnp.zeros( ((Nl*(Nl+1))//2,xx.size))
         # Distribute the grid across devices if possible
         Yd = move_to_device(Yd)
-        Yd.at[self.indx(1,0),:].set(jnp.ones_like(xx))
+        Yd = Yd.at[self.indx(1,0),:].set(jnp.ones_like(xx))
         # Do the case m=0 separately.
         Yd = fori_loop(2, Nl, lambda ell, Yds: get_m0der(ell, Yds, indx, xx, Yv), Yd)
         # then build the m>0 tables.
