@@ -19,6 +19,7 @@ try:
     from utils import move_to_device
     import jax.numpy as jnp
     from functools import partial
+    from jax.lax import fori_loop
     # Choose the number of devices we'll be parallelizing across
     N_devices = len(devices())
 except ImportError:
@@ -32,45 +33,87 @@ except ImportError:
 
 
 
-@partial(jit, static_argnums=(0,))
-def ext_slow_recurrence(Nl,xx,Ylm):
+#@partial(jit, static_argnums=(0,3))
+def ext_slow_recurrence(Nl,xx,Ylm,indx):
     """Pull out the slow, multi-loop piece of the recurrence.  In
     order to use JIT this can not be part of the class, and we need
     to pass Nl,x,Ylm as arguments."""
-    # This should match the convention used in the SHT class below.
-    indx = lambda ell,m:  (m*(2*Nl-1-m))//2 + ell
-    for m in range(0,Nl-1):
-        for ell in range(m+2,Nl):
-            i0,i1,i2    = indx(ell  ,m),\
-                          indx(ell-1,m),\
-                          indx(ell-2,m)
-            fact1,fact2 = jnp.sqrt( (ell-m)*1./(ell+m) ),\
-                          jnp.sqrt( (ell-m-1.)/(ell+m-1.) )
-            Ylm.at[i0,:].set((2*ell-1)*xx*Ylm[i1,:]-\
-                          (ell+m-1)   *Ylm[i2,:]*fact2)
-            Ylm.at[i0,:].multiply(fact1/(ell-m))
+    body_fun = lambda m, Ylms: partial_fun_Ylm(m, Ylm, indx, xx, Nl)
+    Ylm = fori_loop(0, Nl-1, body_fun, Ylm)
     return(Ylm)
     #
 
+def partial_fun_Ylm(m, Ylm, indx, xx, Nl):
+    body_fun = lambda ell, Ylms: full_fun_Ylm(ell, m, Ylms, indx, xx)
+    Ylm = fori_loop(m + 2, Nl, body_fun, Ylm)
+    return Ylm
+
+def full_fun_Ylm(ell, m, Ylm, indx, xx):
+    i0, i1, i2 = indx(ell, m), \
+        indx(ell - 1, m), \
+        indx(ell - 2, m)
+    fact1, fact2 = jnp.sqrt((ell - m) * 1. / (ell + m)), \
+        jnp.sqrt((ell - m - 1.) / (ell + m - 1.))
+    Ylm.at[i0, :].set((2 * ell - 1) * xx * Ylm[i1, :] - \
+                      (ell + m - 1) * Ylm[i2, :] * fact2)
+    Ylm.at[i0, :].multiply(fact1 / (ell - m))
+    return Ylm
 
 
-@partial(jit, static_argnums=(0,))
-def ext_der_slow_recurrence(Nl,xx,Yv,Yd):
+#@partial(jit, static_argnums=(0,3))
+def ext_der_slow_recurrence(Nl,xx,Yv,Yd, indx):
     """Pull out the slow, multi-loop piece of the recurrence for the
     derivatives."""
-    # This should match the convention used in the SHT class below.
-    indx = lambda ell,m:  (m*(2*Nl-1-m))//2 + ell
     omx2 = 1.0-xx**2
-    for ell in range(Nl):
-        for m in range(1,ell+1):
-            i0,i1     = indx(ell,m),indx(ell-1,m)
-            fact      = jnp.sqrt( float(ell-m)/(ell+m) )
-            Yd.at[i0,:].set((ell+m)*fact*Yv[i1,:]-ell*xx*Yv[i0,:])
-            Yd.at[i0,:].divide(omx2)
+    body_fun = lambda ell, dYlm: partial_fun_dYlm(ell, Yv, dYlm, indx, xx, omx2)
+    Yd = fori_loop(0, Nl, body_fun, Yd)
     return(Yd)
     #
 
+def partial_fun_dYlm(ell, Yv, Yd, indx, xx, omx2):
+    body_fun = lambda m, dYlm: full_fun_dYlm(ell, m, Yv, dYlm, indx, xx, omx2)
+    Yd = fori_loop(1, ell + 1, body_fun, Yd)
+    return Yd
 
+def full_fun_dYlm(ell, m, Yv, Yd, indx, xx, omx2):
+    i0, i1 = indx(ell, m), indx(ell - 1, m)
+    fact = jnp.sqrt(1.0*(ell - m) / (ell + m))
+    Yd.at[i0, :].set((ell + m) * fact * Yv[i1, :] - ell * xx * Yv[i0, :])
+    Yd.at[i0, :].divide(omx2)
+    return Yd
+
+def full_norm(ell, m, Y, indx, fact):
+    ii = indx(ell, m)
+    Y.at[ii, :].multiply(fact)
+    return Y
+
+def partial_norm_func(ell, Yv, indx):
+    fact = jnp.sqrt((2 * ell + 1) / 4. / np.pi)
+    body_fun_Y = lambda m, Ylms: full_norm(ell, m, Ylms, indx, fact)
+    return fori_loop(0, ell + 1, body_fun_Y, Yv)
+
+
+def get_mzeros(ell, Plm, indx, xx):
+    i0, i1, i2 = indx(ell, 0), indx(ell - 1, 0), indx(ell - 2, 0)
+    Plm.at[i0, :].set((2 * ell - 1) * xx * Plm[i1, :] - (ell - 1) * Plm[i2, :])
+    Plm.at[i0, :].divide(1.0 * ell)
+    return Plm
+
+def get_mhigh(m, Plm, indx, sx):
+    i0, i1 = indx(m, m), indx(m - 1, m - 1)
+    Plm.at[i0, :].set(-jnp.sqrt(1.0 - 1. / (2 * m)) * sx * Plm[i1, :])
+    return Plm
+
+def get_misellm1(m, Plm, indx, xx):
+    i0, i1 = indx(m, m), indx(m + 1, m)
+    Plm.at[i1, :].set(jnp.sqrt(2 * m + 1.) * xx * Plm[i0, :])
+    return Plm
+
+
+def get_m0der(ell, Yd, indx, xx, Yv):
+    i0, i1 = indx(ell, 0), indx(ell - 1, 0)
+    Yd.at[i0, :].set(ell / (1 - xx ** 2) * (Yv[i1, :] - xx * Yv[i0, :]))
+    return Yd
 
 class DirectSHT:
     """Brute-force spherical harmonic transforms."""
@@ -85,14 +128,11 @@ class DirectSHT:
         Yv = self.compute_Plm_table(Nell,xx)
         Yd = self.compute_der_table(Nell,xx,Yv)
         # And finally put in the (2ell+1)/4pi normalization:
-        for ell in range(Nell):
-            fact = jnp.sqrt( (2*ell+1)/4./np.pi )
-            for m in range(ell+1):
-                ii        = self.indx(ell,m)
-                Yv.at[ii,:].multiply(fact)
-                Yd.at[ii, :].multiply(fact)
+        body_fun = lambda ell, Ylm: partial_norm_func(ell, Ylm, self.indx)
+        Yv, Yd = [fori_loop(0, Nell, body_fun, Y) for Y in [Yv, Yd]]
         self.x,self.Yv,self.Yd = xx,Yv,Yd
         #
+
     def __call__(self,theta,phi,wt,reg_factor=1.,verbose=True):
         """
         Returns alm for a collection of real-valued points at (theta,phi),
@@ -303,6 +343,8 @@ class DirectSHT:
         :return Y[ell,m,x=Cos[theta],0] without the sqrt{(2ell+1)/4pi}
         normalization (that is applied in __init__)
         """
+        # This should match the convention used in the SHT class below.
+        indx = lambda ell, m: (m * (2 * Nl - 1 - m)) // 2 + ell
         # Set up a regular grid of x values.
         Nx = xx.size
         sx = jnp.sqrt(1-xx**2)
@@ -313,24 +355,15 @@ class DirectSHT:
         # First we do the m=0 case.
         Plm.at[self.indx(0,0),:].set(jnp.ones_like(xx))
         Plm.at[self.indx(1, 0), :].set(xx.copy())
-        for ell in range(2,Nl):
-            i0,i1,i2  = self.indx(ell,0),self.indx(ell-1,0),self.indx(ell-2,0)
-            Plm.at[i0,:].set((2*ell-1)*xx*Plm[i1,:]-(ell-1)*Plm[i2,:])
-            Plm.at[i0,:].divide(float(ell))
+        Plm = fori_loop(2, Nl, lambda ell, Plms: get_mzeros(ell, Plms, self.indx, xx), Plm)
         # Now we fill in m>0.
         # To keep the recurrences stable, we treat "high m" and "low m"
         # separately.  Start with the highest value of m allowed:
-        for m in range(1,Nl):
-            i0,i1     = self.indx(m,m),self.indx(m-1,m-1)
-            Plm.at[i0,:].set(-np.sqrt(1.0-1./(2*m))*sx*Plm[i1,:])
+        Plm = fori_loop(1, Nl, lambda m, Plms: get_mhigh(m, Plms, self.indx, sx), Plm)
         # Now do m=ell-1
-        for m in range(1,Nl-1):
-            i0,i1     = self.indx(m,m),self.indx(m+1,m)
-            Plm.at[i1,:].set(np.sqrt(2*m+1.)*xx*Plm[i0,:])
+        Plm = fori_loop(1, Nl-1, lambda m, Plms: get_misellm1(m, Plms, self.indx, xx), Plm)
         # Finally fill in ell>m+1:
-        # First a dummy, warmup run to JIT compile, then the real thing.
-        _   = ext_slow_recurrence( 1,xx,Plm)
-        Plm = ext_slow_recurrence(Nl,xx,Plm)
+        Plm = ext_slow_recurrence(Nl,xx,Plm,indx)
         return(Plm)
         #
     def compute_der_table(self,Nl,xx,Yv):
@@ -342,16 +375,16 @@ class DirectSHT:
         :param  Yv: Already computed Ylm values.
         :return Yd: The table of first derivatives.
         """
+        # This should match the convention used in the SHT class below.
+        indx = lambda ell, m: (m * (2 * Nl - 1 - m)) // 2 + ell
         Yd = jnp.zeros( ((Nl*(Nl+1))//2,xx.size))
         # Distribute the grid across devices if possible
         Yd = move_to_device(Yd)
         Yd.at[self.indx(1,0),:].set(jnp.ones_like(xx))
         # Do the case m=0 separately.
-        for ell in range(2,Nl):
-            i0,i1    = self.indx(ell,0),self.indx(ell-1,0)
-            Yd.at[i0,:].set(ell/(1-xx**2)*(Yv[i1,:]-xx*Yv[i0,:]))
+        Yd = fori_loop(2, Nl, lambda ell, Yds: get_m0der(ell, Yds, indx, xx, Yv), Yd)
         # then build the m>0 tables.
-        _  = ext_der_slow_recurrence( 1,xx,Yv,Yd)
-        Yd = ext_der_slow_recurrence(Nl,xx,Yv,Yd)
+        _  = ext_der_slow_recurrence( 1,xx,Yv,Yd,indx)
+        Yd = ext_der_slow_recurrence(Nl,xx,Yv,Yd,indx)
         return(Yd)
         #
