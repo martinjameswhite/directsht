@@ -44,23 +44,22 @@ def compute_Plm_table(Nl,Nx,xmax):
     @partial(jit, static_argnums=(0, 2), donate_argnums=(1,))
     def get_mzeros(ell, Plm, indx, xx):
         i0, i1, i2 = indx(ell, 0), indx(ell - 1, 0), indx(ell - 2, 0)
-        Plm = Plm.at[i0, :].set((2 * ell - 1) * xx * Plm[i1, :] - (ell - 1) * Plm[i2, :])
-        return Plm.at[i0, :].divide(1.0 * ell)
+        Plm = Plm.at[i0[0], i0[1], :].set((2 * ell - 1) * xx * Plm[i1[0], i1[1], :] - (ell - 1) * Plm[i2[0], i2[1], :])
+        return Plm.at[i0[0], i0[1], :].divide(1.0 * ell)
     #
     @partial(jit, static_argnums=(0, 2), donate_argnums=(1,))
     def get_mhigh(m, Plm, indx, sx):
         i0, i1 = indx(m, m), indx(m - 1, m - 1)
-        return Plm.at[i0, :].set(-jnp.sqrt(1.0 - 1. / (2 * m)) * sx * Plm[i1, :])
+        return Plm.at[i0[0], i0[1], :].set(-jnp.sqrt(1.0 - 1. / (2 * m)) * sx * Plm[i1[0], i1[1], :])
     #
     @partial(jit, static_argnums=(0, 2), donate_argnums=(1,))
     def get_misellm1(m, Plm, indx, xx):
         i0, i1 = indx(m, m), indx(m + 1, m)
-        return Plm.at[i1, :].set(jnp.sqrt(2 * m + 1.) * xx * Plm[i0, :])
+        return Plm.at[i1[0], i1[1], :].set(jnp.sqrt(2 * m + 1.) * xx * Plm[i0[0], i0[1], :])
     #
     @partial(jit, static_argnums=(0, 3), donate_argnums=(2,))
     def ext_slow_recurrence(Nl, xx, Ylm, indx):
-        body_fun = lambda m, Ylms: partial_fun_Ylm(m, Ylm, indx, xx, Nl)
-        return fori_loop(0, Nl - 1, body_fun, Ylm)
+        return vmap(partial_fun_Ylm, (0, None, None, None, None))(jnp.arange(0, Nl, dtype='int'), Ylm, indx, xx, Nl)
     #
     @partial(jit, static_argnums=(0, 2, 4), donate_argnums=(1,))
     def partial_fun_Ylm(m, Ylm, indx, xx, Nl):
@@ -74,22 +73,23 @@ def compute_Plm_table(Nl,Nx,xmax):
             indx(ell - 2, m)
         fact1, fact2 = jnp.sqrt((ell - m) * 1. / (ell + m)), \
             jnp.sqrt((ell - m - 1.) / (ell + m - 1.))
-        Ylm = Ylm.at[i0, :].set((2 * ell - 1) * xx * Ylm[i1, :] - \
-                                (ell + m - 1) * Ylm[i2, :] * fact2)
-        return Ylm.at[i0, :].multiply(fact1 / (ell - m))
+        Ylm = Ylm.at[i0[0], i0[1], :].set((2 * ell - 1) * xx * Ylm[i1[0], i1[1], :] - \
+                                (ell + m - 1) * Ylm[i2[0], i2[1], :] * fact2)
+        return Ylm.at[i0[0], i0[1], :].multiply(fact1 / (ell - m))
     #
     # This should match the convention used in the SHT class below.
-    indx = lambda ell, m: (m * (2 * Nl - 1 - m)) // 2 + ell
+    # We shift all the entries so that rows start at ell=m. This helps recursion.
+    indx = lambda ell, m: (m, ell - m)
     # Set up a regular grid of x values.
     xx = jnp.arange(Nx)/float(Nx-1) * xmax
     sx = jnp.sqrt(1-xx**2)
-    Plm= jnp.zeros( ((Nl*(Nl+1))//2,Nx))
+    Plm= jnp.zeros((Nl,Nl,Nx))
     # Distribute the grid across devices if possible
     Plm = move_to_device(Plm)
     #
     # First we do the m=0 case.
-    Plm= Plm.at[indx(0,0),:].set(jnp.ones_like(xx))
-    Plm = Plm.at[indx(1, 0), :].set(xx.copy())
+    Plm= Plm.at[indx(0,0)[0],indx(0,0)[1],:].set(jnp.ones_like(xx))
+    Plm = Plm.at[indx(1, 0)[0],indx(1, 0)[1], :].set(xx.copy())
     Plm = fori_loop(2, Nl, lambda ell, Plms: get_mzeros(ell, Plms, indx, xx), Plm)
     # Now we fill in m>0.
     # To keep the recurrences stable, we treat "high m" and "low m"
@@ -173,12 +173,13 @@ class DirectSHT:
         print('here')
         Yv = compute_Plm_table(Nell,Nx,xmax)
         print('done with Yv')
-        Yd = compute_der_table(Nell,Nx,xmax,Yv)
+        #Yd = compute_der_table(Nell,Nx,xmax,Yv)
         print('done with Yd')
         # And finally put in the (2ell+1)/4pi normalization:
         body_fun = lambda ell, Ylm: partial_norm_func(ell, Ylm, self.indx)
-        Yv, Yd = [fori_loop(0, Nell, body_fun, Y) for Y in [Yv, Yd]]
-        self.x,self.Yv,self.Yd = xx,Yv,Yd
+        #Yv, Yd = [fori_loop(0, Nell, body_fun, Y) for Y in [Yv, Yd]]
+        #self.x,self.Yv,self.Yd = xx,Yv,Yd
+        self.x, self.Yv
         #
 
     def __call__(self,theta,phi,wt,reg_factor=1.,verbose=True):
