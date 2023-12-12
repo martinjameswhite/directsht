@@ -23,7 +23,6 @@ if __name__=="__main__":
         print('Testing l1={}, l2={}, l3={}'.format(l1,l2,l3))
         print('Fractional difference with sympy: ',
               (our_result-sympy_result)/(sympy_result+1e-40))
-        print('\n')
         #
         l1,l2,l3=Nl-2,Nl-3,5
         our_result   = temp_3js(l1,l2,l3)
@@ -31,13 +30,13 @@ if __name__=="__main__":
         print('Testing l1={}, l2={}, l3={}'.format(l1,l2,l3))
         print('Fractional difference with sympy: ',
               (our_result-sympy_result)/(sympy_result+1e-40))
-        print('\n')
         #
-        l1,l2,l3=2,4,6
-        our_result   = temp_3js(l1,l2,l3)
-        sympy_result = wigner_3j(l1,l2,l3,0,0,0).n(32)
-        print('Testing l1={}, l2={}, l3={}'.format(l1,l2,l3))
-        print('Fractional difference with sympy: ',
-              (our_result-sympy_result)/(sympy_result+1e-40))
+        for l1 in [2,8,20]:
+            l2,l3=l1+4,l1+8
+            our_result   = temp_3js(l1,l2,l3)
+            sympy_result = wigner_3j(l1,l2,l3,0,0,0).n(32)
+            print('Testing l1={}, l2={}, l3={}'.format(l1,l2,l3))
+            print('Fractional difference with sympy: ',
+                  (our_result-sympy_result)/(sympy_result+1e-40))
         print('\n')
     #
