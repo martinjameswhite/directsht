@@ -6,7 +6,6 @@
 #
 #
 import numpy as np
-import numba as nb
 import interp_funcs as interp
 import utils
 import time
@@ -16,15 +15,24 @@ try:
     jax_present = True
     from   jax import vmap, jit, devices
     from jax.sharding import PositionalSharding
+    from jax.experimental import mesh_utils
     from utils import move_to_device
+    import jax.numpy as jnp
+    from functools import partial
+    # Choose the number of devices we'll be parallelizing across
+    N_devices = len(devices())
 except ImportError:
     jax_present = False
     move_to_device = lambda x, **kwargs: x  # Dummy definition for fallback
     print("JAX not found. Falling back to NumPy.")
+    import numpy as jnp
+    from numba import njit as jit
+    N_devices = 1
 
 
 
-@nb.njit
+
+@partial(jit, static_argnums=(0,))
 def ext_slow_recurrence(Nl,xx,Ylm):
     """Pull out the slow, multi-loop piece of the recurrence.  In
     order to use JIT this can not be part of the class, and we need
@@ -36,17 +44,17 @@ def ext_slow_recurrence(Nl,xx,Ylm):
             i0,i1,i2    = indx(ell  ,m),\
                           indx(ell-1,m),\
                           indx(ell-2,m)
-            fact1,fact2 = np.sqrt( (ell-m)*1./(ell+m) ),\
-                          np.sqrt( (ell-m-1.)/(ell+m-1.) )
-            Ylm[i0,:]   = (2*ell-1)*xx*Ylm[i1,:]-\
-                          (ell+m-1)   *Ylm[i2,:]*fact2
-            Ylm[i0,:]  *= fact1/(ell-m)
+            fact1,fact2 = jnp.sqrt( (ell-m)*1./(ell+m) ),\
+                          jnp.sqrt( (ell-m-1.)/(ell+m-1.) )
+            Ylm.at[i0,:].set((2*ell-1)*xx*Ylm[i1,:]-\
+                          (ell+m-1)   *Ylm[i2,:]*fact2)
+            Ylm.at[i0,:].multiply(fact1/(ell-m))
     return(Ylm)
     #
 
 
 
-@nb.njit
+@partial(jit, static_argnums=(0,))
 def ext_der_slow_recurrence(Nl,xx,Yv,Yd):
     """Pull out the slow, multi-loop piece of the recurrence for the
     derivatives."""
@@ -56,9 +64,9 @@ def ext_der_slow_recurrence(Nl,xx,Yv,Yd):
     for ell in range(Nl):
         for m in range(1,ell+1):
             i0,i1     = indx(ell,m),indx(ell-1,m)
-            fact      = np.sqrt( float(ell-m)/(ell+m) )
-            Yd[i0,:]  = (ell+m)*fact*Yv[i1,:]-ell*xx*Yv[i0,:]
-            Yd[i0,:] /= omx2
+            fact      = jnp.sqrt( float(ell-m)/(ell+m) )
+            Yd.at[i0,:].set((ell+m)*fact*Yv[i1,:]-ell*xx*Yv[i0,:])
+            Yd.at[i0,:].divide(omx2)
     return(Yd)
     #
 
@@ -73,16 +81,16 @@ class DirectSHT:
         :param xmax:  Maximum value of |cos(theta)| to compute.
         """
         self.Nell, self.Nx, self.xmax = Nell, Nx, xmax
-        xx = np.arange(Nx,dtype='float64')/float(Nx-1) * xmax
+        xx = jnp.arange(Nx)/float(Nx-1) * xmax
         Yv = self.compute_Plm_table(Nell,xx)
         Yd = self.compute_der_table(Nell,xx,Yv)
         # And finally put in the (2ell+1)/4pi normalization:
         for ell in range(Nell):
-            fact = np.sqrt( (2*ell+1)/4./np.pi )
+            fact = jnp.sqrt( (2*ell+1)/4./np.pi )
             for m in range(ell+1):
                 ii        = self.indx(ell,m)
-                Yv[ii,:] *= fact
-                Yd[ii,:] *= fact
+                Yv.at[ii,:].multiply(fact)
+                Yd.at[ii, :].multiply(fact)
         self.x,self.Yv,self.Yd = xx,Yv,Yd
         #
     def __call__(self,theta,phi,wt,reg_factor=1.,verbose=True):
@@ -217,7 +225,7 @@ class DirectSHT:
                 alm_grid = utils.unpad(alm_grid, len(ell_ordering))
             else:
                 # JIT compile the get_alm function
-                get_alm_jitted = nb.jit(nopython=True)(interp.get_alm_np)
+                get_alm_jitted = jit(nopython=True)(interp.get_alm_np)
                 #
                 alm_grid = np.zeros(len(self.Yv[:, occupied_bins][:,0]), dtype='complex128')
                 vs_tot = vs_real - 1j * vs_imag
@@ -297,26 +305,28 @@ class DirectSHT:
         """
         # Set up a regular grid of x values.
         Nx = xx.size
-        sx = np.sqrt(1-xx**2)
-        Plm= np.zeros( ((Nl*(Nl+1))//2,Nx), dtype='float64')
+        sx = jnp.sqrt(1-xx**2)
+        Plm= jnp.zeros( ((Nl*(Nl+1))//2,Nx))
+        # Distribute the grid across devices if possible
+        Plm = move_to_device(Plm)
         #
         # First we do the m=0 case.
-        Plm[self.indx(0,0),:] = np.ones_like(xx)
-        Plm[self.indx(1,0),:] = xx.copy()
+        Plm.at[self.indx(0,0),:].set(jnp.ones_like(xx))
+        Plm.at[self.indx(1, 0), :].set(xx.copy())
         for ell in range(2,Nl):
             i0,i1,i2  = self.indx(ell,0),self.indx(ell-1,0),self.indx(ell-2,0)
-            Plm[i0,:] = (2*ell-1)*xx*Plm[i1,:]-(ell-1)*Plm[i2,:]
-            Plm[i0,:]/= float(ell)
+            Plm.at[i0,:].set((2*ell-1)*xx*Plm[i1,:]-(ell-1)*Plm[i2,:])
+            Plm.at[i0,:].divide(float(ell))
         # Now we fill in m>0.
         # To keep the recurrences stable, we treat "high m" and "low m"
         # separately.  Start with the highest value of m allowed:
         for m in range(1,Nl):
             i0,i1     = self.indx(m,m),self.indx(m-1,m-1)
-            Plm[i0,:] = -np.sqrt(1.0-1./(2*m))*sx*Plm[i1,:]
+            Plm.at[i0,:].set(-np.sqrt(1.0-1./(2*m))*sx*Plm[i1,:])
         # Now do m=ell-1
         for m in range(1,Nl-1):
             i0,i1     = self.indx(m,m),self.indx(m+1,m)
-            Plm[i1,:] = np.sqrt(2*m+1.)*xx*Plm[i0,:]
+            Plm.at[i1,:].set(np.sqrt(2*m+1.)*xx*Plm[i0,:])
         # Finally fill in ell>m+1:
         # First a dummy, warmup run to JIT compile, then the real thing.
         _   = ext_slow_recurrence( 1,xx,Plm)
@@ -332,12 +342,14 @@ class DirectSHT:
         :param  Yv: Already computed Ylm values.
         :return Yd: The table of first derivatives.
         """
-        Yd = np.zeros( ((Nl*(Nl+1))//2,xx.size), dtype='float64')
-        Yd[self.indx(1,0),:] = np.ones_like(xx)
+        Yd = jnp.zeros( ((Nl*(Nl+1))//2,xx.size))
+        # Distribute the grid across devices if possible
+        Yd = move_to_device(Yd)
+        Yd.at[self.indx(1,0),:].set(jnp.ones_like(xx))
         # Do the case m=0 separately.
         for ell in range(2,Nl):
             i0,i1    = self.indx(ell,0),self.indx(ell-1,0)
-            Yd[i0,:] = ell/(1-xx**2)*(Yv[i1,:]-xx*Yv[i0,:])
+            Yd.at[i0,:].set(ell/(1-xx**2)*(Yv[i1,:]-xx*Yv[i0,:]))
         # then build the m>0 tables.
         _  = ext_der_slow_recurrence( 1,xx,Yv,Yd)
         Yd = ext_der_slow_recurrence(Nl,xx,Yv,Yd)
