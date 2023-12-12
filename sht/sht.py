@@ -30,51 +30,124 @@ except ImportError:
     from numba import njit as jit
     N_devices = 1
 
+@partial(jit, static_argnums=(0,1,2))
+def compute_Plm_table(Nl,Nx,xmax):
+    """Use recurrence relations to compute a table of Ylm[cos(theta),0]
+    for ell>=0, m>=0, x>=0.  Can use symmetries to get m<0 and/or x<0,
+    viz. (-1)^m for m<0 and (-1)^(ell-m) for x<0.
+    :param  Nl: Number of ells (and hence m's) in the grid.
+    :param  xx: Array of x points (non-negative and increasing).
+    :return Y[ell,m,x=Cos[theta],0] without the sqrt{(2ell+1)/4pi}
+    normalization (that is applied in __init__)
+    """
 
-
-
-#@partial(jit, static_argnums=(0,3))
-def ext_slow_recurrence(Nl,xx,Ylm,indx):
-    """Pull out the slow, multi-loop piece of the recurrence.  In
-    order to use JIT this can not be part of the class, and we need
-    to pass Nl,x,Ylm as arguments."""
-    body_fun = lambda m, Ylms: partial_fun_Ylm(m, Ylm, indx, xx, Nl)
-    return fori_loop(0, Nl-1, body_fun, Ylm)
+    @partial(jit, static_argnums=(0, 2), donate_argnums=(1,))
+    def get_mzeros(ell, Plm, indx, xx):
+        i0, i1, i2 = indx(ell, 0), indx(ell - 1, 0), indx(ell - 2, 0)
+        Plm = Plm.at[i0, :].set((2 * ell - 1) * xx * Plm[i1, :] - (ell - 1) * Plm[i2, :])
+        return Plm.at[i0, :].divide(1.0 * ell)
     #
-
-def partial_fun_Ylm(m, Ylm, indx, xx, Nl):
-    body_fun = lambda ell, Ylms: full_fun_Ylm(ell, m, Ylms, indx, xx)
-    return fori_loop(m + 2, Nl, body_fun, Ylm)
-
-def full_fun_Ylm(ell, m, Ylm, indx, xx):
-    i0, i1, i2 = indx(ell, m), \
-        indx(ell - 1, m), \
-        indx(ell - 2, m)
-    fact1, fact2 = jnp.sqrt((ell - m) * 1. / (ell + m)), \
-        jnp.sqrt((ell - m - 1.) / (ell + m - 1.))
-    Ylm = Ylm.at[i0, :].set((2 * ell - 1) * xx * Ylm[i1, :] - \
-                      (ell + m - 1) * Ylm[i2, :] * fact2)
-    return Ylm.at[i0, :].multiply(fact1 / (ell - m))
-
-
-#@partial(jit, static_argnums=(0,3))
-def ext_der_slow_recurrence(Nl,xx,Yv,Yd, indx):
-    """Pull out the slow, multi-loop piece of the recurrence for the
-    derivatives."""
-    omx2 = 1.0-xx**2
-    body_fun = lambda ell, dYlm: partial_fun_dYlm(ell, Yv, dYlm, indx, xx, omx2)
-    return fori_loop(0, Nl, body_fun, Yd)
+    @partial(jit, static_argnums=(0, 2), donate_argnums=(1,))
+    def get_mhigh(m, Plm, indx, sx):
+        i0, i1 = indx(m, m), indx(m - 1, m - 1)
+        return Plm.at[i0, :].set(-jnp.sqrt(1.0 - 1. / (2 * m)) * sx * Plm[i1, :])
     #
+    @partial(jit, static_argnums=(0, 2), donate_argnums=(1,))
+    def get_misellm1(m, Plm, indx, xx):
+        i0, i1 = indx(m, m), indx(m + 1, m)
+        return Plm.at[i1, :].set(jnp.sqrt(2 * m + 1.) * xx * Plm[i0, :])
+    #
+    @partial(jit, static_argnums=(0, 3), donate_argnums=(2,))
+    def ext_slow_recurrence(Nl, xx, Ylm, indx):
+        body_fun = lambda m, Ylms: partial_fun_Ylm(m, Ylm, indx, xx, Nl)
+        return fori_loop(0, Nl - 1, body_fun, Ylm)
+    #
+    @partial(jit, static_argnums=(0, 2, 4), donate_argnums=(1,))
+    def partial_fun_Ylm(m, Ylm, indx, xx, Nl):
+        body_fun = lambda ell, Ylms: full_fun_Ylm(ell, m, Ylms, indx, xx)
+        return fori_loop(m + 2, Nl, body_fun, Ylm)
+    #
+    @partial(jit, static_argnums=(0, 1, 3), donate_argnums=(2,))
+    def full_fun_Ylm(ell, m, Ylm, indx, xx):
+        i0, i1, i2 = indx(ell, m), \
+            indx(ell - 1, m), \
+            indx(ell - 2, m)
+        fact1, fact2 = jnp.sqrt((ell - m) * 1. / (ell + m)), \
+            jnp.sqrt((ell - m - 1.) / (ell + m - 1.))
+        Ylm = Ylm.at[i0, :].set((2 * ell - 1) * xx * Ylm[i1, :] - \
+                                (ell + m - 1) * Ylm[i2, :] * fact2)
+        return Ylm.at[i0, :].multiply(fact1 / (ell - m))
+    #
+    # This should match the convention used in the SHT class below.
+    indx = lambda ell, m: (m * (2 * Nl - 1 - m)) // 2 + ell
+    # Set up a regular grid of x values.
+    xx = jnp.arange(Nx)/float(Nx-1) * xmax
+    sx = jnp.sqrt(1-xx**2)
+    Plm= jnp.zeros( ((Nl*(Nl+1))//2,Nx))
+    # Distribute the grid across devices if possible
+    Plm = move_to_device(Plm)
+    #
+    # First we do the m=0 case.
+    Plm= Plm.at[indx(0,0),:].set(jnp.ones_like(xx))
+    Plm = Plm.at[indx(1, 0), :].set(xx.copy())
+    Plm = fori_loop(2, Nl, lambda ell, Plms: get_mzeros(ell, Plms, indx, xx), Plm)
+    # Now we fill in m>0.
+    # To keep the recurrences stable, we treat "high m" and "low m"
+    # separately.  Start with the highest value of m allowed:
+    Plm = fori_loop(1, Nl, lambda m, Plms: get_mhigh(m, Plms, indx, sx), Plm)
+    # Now do m=ell-1
+    Plm = fori_loop(1, Nl-1, lambda m, Plms: get_misellm1(m, Plms, indx, xx), Plm)
+    # Finally fill in ell>m+1:
+    Plm = ext_slow_recurrence(Nl,xx,Plm,indx)
+    return(Plm)
 
-def partial_fun_dYlm(ell, Yv, Yd, indx, xx, omx2):
-    body_fun = lambda m, dYlm: full_fun_dYlm(ell, m, Yv, dYlm, indx, xx, omx2)
-    return fori_loop(1, ell + 1, body_fun, Yd)
+@partial(jit, static_argnums=(0,1,2))
+def compute_der_table(Nl,Nx,xmax,Yv):
+    """Use recurrence relations to compute a table of derivatives of
+    Ylm[cos(theta),0] for ell>=0, m>=0, x=>0.
+    Assumes the Ylm table has already been built (passed as Yv).
+    :param  Nl: Number of ells in the derivative grid.
+    :param  xx: Values of cos(theta) at which to evaluate derivs.
+    :param  Yv: Already computed Ylm values.
+    :return Yd: The table of first derivatives.
+    """
 
-def full_fun_dYlm(ell, m, Yv, Yd, indx, xx, omx2):
-    i0, i1 = indx(ell, m), indx(ell - 1, m)
-    fact = jnp.sqrt(1.0*(ell - m) / (ell + m))
-    Yd = Yd.at[i0, :].set((ell + m) * fact * Yv[i1, :] - ell * xx * Yv[i0, :])
-    return Yd.at[i0, :].divide(omx2)
+    @partial(jit, static_argnums=(0, 2), donate_argnums=(1,))
+    def get_m0der(ell, Yd, indx, xx, Yv):
+        i0, i1 = indx(ell, 0), indx(ell - 1, 0)
+        return Yd.at[i0, :].set(ell / (1 - xx ** 2) * (Yv[i1, :] - xx * Yv[i0, :]))
+    #
+    @partial(jit, static_argnums=(0,4), donate_argnums=(3,))
+    def ext_der_slow_recurrence(Nl, xx, Yv, Yd, indx):
+        omx2 = 1.0 - xx ** 2
+        body_fun = lambda ell, dYlm: partial_fun_dYlm(ell, Yv, dYlm, indx, xx, omx2)
+        return fori_loop(0, Nl, body_fun, Yd)
+    #
+    @partial(jit, static_argnums=(0, 3), donate_argnums=(2,))
+    def partial_fun_dYlm(ell, Yv, Yd, indx, xx, omx2):
+        body_fun = lambda m, dYlm: full_fun_dYlm(ell, m, Yv, dYlm, indx, xx, omx2)
+        return fori_loop(1, ell + 1, body_fun, Yd)
+    #
+    @partial(jit, static_argnums=(0, 1, 4), donate_argnums=(3,))
+    def full_fun_dYlm(ell, m, Yv, Yd, indx, xx, omx2):
+        i0, i1 = indx(ell, m), indx(ell - 1, m)
+        fact = jnp.sqrt(1.0 * (ell - m) / (ell + m))
+        Yd = Yd.at[i0, :].set((ell + m) * fact * Yv[i1, :] - ell * xx * Yv[i0, :])
+        return Yd.at[i0, :].divide(omx2)
+    #
+    xx = jnp.arange(Nx) / float(Nx - 1) * xmax
+    # This should match the convention used in the SHT class below.
+    indx = lambda ell, m: (m * (2 * Nl - 1 - m)) // 2 + ell
+    Yd = jnp.zeros( ((Nl*(Nl+1))//2,xx.size))
+    # Distribute the grid across devices if possible
+    Yd = move_to_device(Yd)
+    Yd = Yd.at[indx(1,0),:].set(jnp.ones_like(xx))
+    # Do the case m=0 separately.
+    Yd = fori_loop(2, Nl, lambda ell, Yds: get_m0der(ell, Yds, indx, xx, Yv), Yd)
+    # then build the m>0 tables.
+    _  = ext_der_slow_recurrence( 1,xx,Yv,Yd,indx)
+    Yd = ext_der_slow_recurrence(Nl,xx,Yv,Yd,indx)
+    return(Yd)
 
 def full_norm(ell, m, Y, indx, fact):
     ii = indx(ell, m)
@@ -86,23 +159,6 @@ def partial_norm_func(ell, Yv, indx):
     return fori_loop(0, ell + 1, body_fun_Y, Yv)
 
 
-def get_mzeros(ell, Plm, indx, xx):
-    i0, i1, i2 = indx(ell, 0), indx(ell - 1, 0), indx(ell - 2, 0)
-    Plm = Plm.at[i0, :].set((2 * ell - 1) * xx * Plm[i1, :] - (ell - 1) * Plm[i2, :])
-    return Plm.at[i0, :].divide(1.0 * ell)
-
-def get_mhigh(m, Plm, indx, sx):
-    i0, i1 = indx(m, m), indx(m - 1, m - 1)
-    return Plm.at[i0, :].set(-jnp.sqrt(1.0 - 1. / (2 * m)) * sx * Plm[i1, :])
-
-def get_misellm1(m, Plm, indx, xx):
-    i0, i1 = indx(m, m), indx(m + 1, m)
-    return Plm.at[i1, :].set(jnp.sqrt(2 * m + 1.) * xx * Plm[i0, :])
-
-
-def get_m0der(ell, Yd, indx, xx, Yv):
-    i0, i1 = indx(ell, 0), indx(ell - 1, 0)
-    return Yd.at[i0, :].set(ell / (1 - xx ** 2) * (Yv[i1, :] - xx * Yv[i0, :]))
 
 class DirectSHT:
     """Brute-force spherical harmonic transforms."""
@@ -114,8 +170,11 @@ class DirectSHT:
         """
         self.Nell, self.Nx, self.xmax = Nell, Nx, xmax
         xx = jnp.arange(Nx)/float(Nx-1) * xmax
-        Yv = self.compute_Plm_table(Nell,xx)
-        Yd = self.compute_der_table(Nell,xx,Yv)
+        print('here')
+        Yv = compute_Plm_table(Nell,Nx,xmax)
+        print('done with Yv')
+        Yd = compute_der_table(Nell,Nx,xmax,Yv)
+        print('done with Yd')
         # And finally put in the (2ell+1)/4pi normalization:
         body_fun = lambda ell, Ylm: partial_norm_func(ell, Ylm, self.indx)
         Yv, Yd = [fori_loop(0, Nell, body_fun, Y) for Y in [Yv, Yd]]
@@ -323,57 +382,4 @@ class DirectSHT:
         yx = self.Yv[jj,i0]*s0+self.Yd[jj,i0]*s1*dx +\
              self.Yv[jj,i1]*s2+self.Yd[jj,i1]*s3*dx
         return(yx)
-    def compute_Plm_table(self,Nl,xx):
-        """Use recurrence relations to compute a table of Ylm[cos(theta),0]
-        for ell>=0, m>=0, x>=0.  Can use symmetries to get m<0 and/or x<0,
-        viz. (-1)^m for m<0 and (-1)^(ell-m) for x<0.
-        :param  Nl: Number of ells (and hence m's) in the grid.
-        :param  xx: Array of x points (non-negative and increasing).
-        :return Y[ell,m,x=Cos[theta],0] without the sqrt{(2ell+1)/4pi}
-        normalization (that is applied in __init__)
-        """
-        # This should match the convention used in the SHT class below.
-        indx = lambda ell, m: (m * (2 * Nl - 1 - m)) // 2 + ell
-        # Set up a regular grid of x values.
-        Nx = xx.size
-        sx = jnp.sqrt(1-xx**2)
-        Plm= jnp.zeros( ((Nl*(Nl+1))//2,Nx))
-        # Distribute the grid across devices if possible
-        Plm = move_to_device(Plm)
-        #
-        # First we do the m=0 case.
-        Plm= Plm.at[self.indx(0,0),:].set(jnp.ones_like(xx))
-        Plm = Plm.at[self.indx(1, 0), :].set(xx.copy())
-        Plm = fori_loop(2, Nl, lambda ell, Plms: get_mzeros(ell, Plms, self.indx, xx), Plm)
-        # Now we fill in m>0.
-        # To keep the recurrences stable, we treat "high m" and "low m"
-        # separately.  Start with the highest value of m allowed:
-        Plm = fori_loop(1, Nl, lambda m, Plms: get_mhigh(m, Plms, self.indx, sx), Plm)
-        # Now do m=ell-1
-        Plm = fori_loop(1, Nl-1, lambda m, Plms: get_misellm1(m, Plms, self.indx, xx), Plm)
-        # Finally fill in ell>m+1:
-        Plm = ext_slow_recurrence(Nl,xx,Plm,indx)
-        return(Plm)
-        #
-    def compute_der_table(self,Nl,xx,Yv):
-        """Use recurrence relations to compute a table of derivatives of
-        Ylm[cos(theta),0] for ell>=0, m>=0, x=>0.
-        Assumes the Ylm table has already been built (passed as Yv).
-        :param  Nl: Number of ells in the derivative grid.
-        :param  xx: Values of cos(theta) at which to evaluate derivs.
-        :param  Yv: Already computed Ylm values.
-        :return Yd: The table of first derivatives.
-        """
-        # This should match the convention used in the SHT class below.
-        indx = lambda ell, m: (m * (2 * Nl - 1 - m)) // 2 + ell
-        Yd = jnp.zeros( ((Nl*(Nl+1))//2,xx.size))
-        # Distribute the grid across devices if possible
-        Yd = move_to_device(Yd)
-        Yd = Yd.at[self.indx(1,0),:].set(jnp.ones_like(xx))
-        # Do the case m=0 separately.
-        Yd = fori_loop(2, Nl, lambda ell, Yds: get_m0der(ell, Yds, indx, xx, Yv), Yd)
-        # then build the m>0 tables.
-        _  = ext_der_slow_recurrence( 1,xx,Yv,Yd,indx)
-        Yd = ext_der_slow_recurrence(Nl,xx,Yv,Yd,indx)
-        return(Yd)
         #
