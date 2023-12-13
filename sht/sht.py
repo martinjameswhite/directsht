@@ -40,20 +40,20 @@ def compute_Plm_table(Nl,Nx,xmax):
     normalization (that is applied in __init__)
     """
 
-    @jit #@partial(jit, static_argnums=(0, 2), donate_argnums=(1,))
+    @jit
     def get_mzeros(ell, Plm, xx):
         indx = lambda ell, m: (m, ell)
         i0, i1, i2 = indx(ell, 0), indx(ell - 1, 0), indx(ell - 2, 0)
         Plm = Plm.at[i0[0], i0[1], :].set((2 * ell - 1) * xx * Plm[i1[0], i1[1], :] - (ell - 1) * Plm[i2[0], i2[1], :])
         return Plm.at[i0[0], i0[1], :].divide(1.0 * ell)
     #
-    @jit #@partial(jit, static_argnums=(0, 2), donate_argnums=(1,))
+    @jit
     def get_mhigh(m, Plm, sx):
         indx = lambda ell, m: (m, ell)
         i0, i1 = indx(m, m), indx(m - 1, m - 1)
         return Plm.at[i0[0], i0[1], :].set(-jnp.sqrt(1.0 - 1. / (2 * m)) * sx * Plm[i1[0], i1[1], :])
     #
-    @jit #@partial(jit, static_argnums=(0, 2), donate_argnums=(1,))
+    @jit
     def get_misellm1(m, Plm, xx):
         indx = lambda ell, m: (m, ell)
         i0, i1 = indx(m, m), indx(m + 1, m)
@@ -113,27 +113,13 @@ def compute_der_table(Nl,Nx,xmax,Yv):
     :param  Yv: Already computed Ylm values.
     :return Yd: The table of first derivatives.
     """
-
-    def get_meqellder(ell, Yd, xx, Yv):
-        indx = lambda ell, m: (m, ell)
-        i0 = indx(ell, ell)
-        omx2 = 1.0 - xx ** 2
-        return Yd.at[i0[0], i0[1], :].set(- ell * xx *  Yv[i0[0], i0[1], :] / omx2)
     #
-    '''
-    def ext_der_slow_recurrence(Nl, xx, Yv, Yd):
-        omx2 = 1.0 - xx ** 2
-        return vmap(partial_fun_dYlm, (0, 0, 0, None, None, None))(jnp.arange(0, Nl, dtype='int32'), Yv, Yd, xx, omx2, Nl)
-    #
-    def partial_fun_dYlm(m, Yv_at_m, Yd_at_m, xx, omx2, Nl):
-        return vmap(full_fun_dYlm, (0, None, None, 0, None, None))(jnp.arange(1, Nl, dtype='int32'), m, Yv_at_m, Yd_at_m, xx, omx2)
-    #
-    '''
     def ext_der_slow_recurrence(Nl, xx, Yv, Yd):
         omx2 = 1.0 - xx ** 2
         ms = jnp.arange(0, Nl, dtype='int32')
         ells = jnp.arange(0, Nl, dtype='int32')
-        return vmap(vmap(full_fun_dYlm, (0, None, None, 0, None, None)), (None, 0, 0, 0, None, None))(ells, ms, Yv, Yd, xx, omx2)
+        return vmap(vmap(full_fun_dYlm, (0, None, None, 0, None, None)),
+                    (None, 0, 0, 0, None, None))(ells, ms, Yv, Yd, xx, omx2)
     @jit
     def full_fun_dYlm(ell, m, Yv_at_m, Yd_at_ell_m, xx, omx2):
         indx = lambda ell, m: (m, ell)
@@ -148,12 +134,12 @@ def compute_der_table(Nl,Nx,xmax,Yv):
     Yd = jnp.zeros_like(Yv)
     # Distribute the grid across devices if possible
     Yd = move_to_device(Yd)
-    Yd = Yd.at[indx(1,0)[0], indx(1,0)[1],:].set(jnp.ones_like(xx))
-    Yd = Yd.at[indx(0,0)[0], indx(0,0)[1],:].set(jnp.zeros_like(xx))
-    # Do the case m=ell=0 separately.
-    #Yd = get_meqellder(0, Yd, xx, Yv)
     # then build the m>0 tables.
     Yd = ext_der_slow_recurrence(Nl,xx,Yv,Yd)
+    # Do ell=1, m=0. Note that ell=0, m=0 is already done (it's zero).
+    Yd = Yd.at[indx(1,0)[0], indx(1,0)[1],:].set(jnp.ones_like(xx))
+    Yd = Yd.at[indx(0,0)[0], indx(0,0)[1],:].set(jnp.zeros_like(xx))
+    # TODO: set nans to zero
     return(Yd)
 
 def full_norm(ell, m, Y, fact):
@@ -178,14 +164,18 @@ class DirectSHT:
         """
         self.Nell, self.Nx, self.xmax = Nell, Nx, xmax
         xx = jnp.arange(Nx)/float(Nx-1) * xmax
-        print('starting')
+        t0 = time.time()
         Yv = compute_Plm_table(Nell,Nx,xmax)
-        print('done with Yv')
+        t1 = time.time()
+        print('done with Yv', t1-t0)
         Yd = compute_der_table(Nell,Nx,xmax,Yv)
-        print('done with Yd')
+        t2 = time.time()
+        print('done with Yd',t2-t1)
         # And finally put in the (2ell+1)/4pi normalization:
         body_fun = lambda ell, Ylm: partial_norm_func(ell, Ylm)
         Yv, Yd = [fori_loop(0, Nell, body_fun, Y) for Y in [Yv, Yd]]
+        t3 = time.time()
+        print('done normalizing',t3-t2)
         self.x,self.Yv,self.Yd = xx,Yv,Yd
         print('done here')
         #
