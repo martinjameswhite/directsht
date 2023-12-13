@@ -139,19 +139,15 @@ def compute_der_table(Nl,Nx,xmax,Yv):
     # Do ell=1, m=0. Note that ell=0, m=0 is already done (it's zero).
     Yd = Yd.at[indx(1,0)[0], indx(1,0)[1],:].set(jnp.ones_like(xx))
     Yd = Yd.at[indx(0,0)[0], indx(0,0)[1],:].set(jnp.zeros_like(xx))
-    # TODO: set nans to zero
     return(Yd)
 
-def full_norm(ell, m, Y, fact):
-    indx = lambda ell, m: (m, ell)
-    ii = indx(ell, m)
-    return Y.at[ii[0], ii[1], :].multiply(fact)
+def normalize(Nl, Y):
+    ells = jnp.arange(0, Nl, dtype='int32')
+    fact = jnp.sqrt((2 * ells + 1) / 4. / np.pi)
+    return vmap(multiply_row, (1,0), 1)(Y, fact)
 
-def partial_norm_func(ell, Yv):
-    fact = jnp.sqrt((2 * ell + 1) / 4. / np.pi)
-    body_fun_Y = lambda m, Ylms: full_norm(ell, m, Ylms, fact)
-    return fori_loop(0, ell + 1, body_fun_Y, Yv)
-
+def multiply_row(row, scaling_factor):
+    return row * scaling_factor
 
 
 class DirectSHT:
@@ -172,8 +168,8 @@ class DirectSHT:
         t2 = time.time()
         print('done with Yd',t2-t1)
         # And finally put in the (2ell+1)/4pi normalization:
-        body_fun = lambda ell, Ylm: partial_norm_func(ell, Ylm)
-        Yv, Yd = [fori_loop(0, Nell, body_fun, Y) for Y in [Yv, Yd]]
+        Yv, Yd = [normalize(Nell, Y) for Y in [Yv, Yd]]
+        normalize
         t3 = time.time()
         print('done normalizing',t3-t2)
         self.x,self.Yv,self.Yd = xx,Yv,Yd
