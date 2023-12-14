@@ -30,7 +30,7 @@ except ImportError:
     from numba import njit as jit
     N_devices = 1
 
-@partial(jit, static_argnums=(0,1,2))
+#@partial(jit, static_argnums=(0,1,2))
 def compute_Plm_table(Nl,Nx,xmax):
     """Use recurrence relations to compute a table of Ylm[cos(theta),0]
     for ell>=0, m>=0, x>=0.  Can use symmetries to get m<0 and/or x<0,
@@ -40,13 +40,6 @@ def compute_Plm_table(Nl,Nx,xmax):
     :return Y[ell,m,x=Cos[theta],0] without the sqrt{(2ell+1)/4pi}
     normalization (that is applied in __init__)
     """
-
-    @jit
-    def get_mzeros(ell, Plm, xx):
-        indx = lambda ell, m: (m, ell-m)
-        i0, i1, i2 = indx(ell, 0), indx(ell - 1, 0), indx(ell - 2, 0)
-        Plm = Plm.at[i0[0], i0[1], :].set((2 * ell - 1) * xx * Plm[i1[0], i1[1], :] - (ell - 1) * Plm[i2[0], i2[1], :])
-        return Plm.at[i0[0], i0[1], :].divide(1.0 * ell)
     #
     @jit
     def get_mhigh(m, Plm, sx):
@@ -68,12 +61,13 @@ def compute_Plm_table(Nl,Nx,xmax):
     def partial_fun_Ylm(m, Ylm_row, xx):
         # Ylm_row.shape = (Nl, Nx)
         body_fun = lambda ell, Ylm_at_m: full_fun_Ylm(ell, m, Ylm_at_m, xx)
-        #return fori_loop(m + 2, len(Ylm_row), body_fun, Ylm_row)
         return fori_loop(0, len(Ylm_row)-2, body_fun, Ylm_row)
     #
     @jit
     def full_fun_Ylm(i, m, Ylm_at_m, xx):
+        # Our indexing schem is (m, ell-m), so we can get ell from the loop index as
         ell = m + i + 2
+        # The recursion relies on the previous two elements on this row
         i0, i1, i2 = i+2, i+1, i
         fact1, fact2 = jnp.sqrt((ell - m) * 1. / (ell + m)), \
             jnp.sqrt((ell - m - 1.) / (ell + m - 1.))
@@ -84,7 +78,6 @@ def compute_Plm_table(Nl,Nx,xmax):
     #
     # This should match the convention used in the SHT class below.
     # We shift all the entries so that rows start at ell=m. This helps recursion.
-    ta = time.time()
     indx = lambda ell, m: (m, ell-m)
     # Set up a regular grid of x values.
     xx = jnp.arange(Nx)/float(Nx-1) * xmax
@@ -92,13 +85,9 @@ def compute_Plm_table(Nl,Nx,xmax):
     Plm= jnp.zeros((Nl,Nl,Nx))
     # Distribute the grid across devices if possible
     Plm = move_to_device(Plm)
-    #
-    # First we do the m=0 case.
+    # First we do the l=m=0 and l=1, m=0 cases
     Plm= Plm.at[indx(0,0)[0],indx(0,0)[1],:].set(jnp.ones_like(xx))
     Plm = Plm.at[indx(1, 0)[0],indx(1, 0)[1], :].set(xx.copy())
-    tb0 = time.time()
-    print('Preparing took', tb0-ta)
-    Plm = fori_loop(2, Nl, lambda ell, Plms: get_mzeros(ell, Plms, xx), Plm)
     # Now we fill in m>0.
     # To keep the recurrences stable, we treat "high m" and "low m"
     # separately.  Start with the highest value of m allowed:
@@ -106,13 +95,7 @@ def compute_Plm_table(Nl,Nx,xmax):
     # Now do m=ell-1
     Plm = fori_loop(1, Nl-1, lambda m, Plms: get_misellm1(m, Plms, xx), Plm)
     # Finally fill in ell>m+1:
-    tb = time.time()
-    print(Plm[:,:,3])
-    print('Early part of Yv took', tb-tb0)
     Plm = ext_slow_recurrence(xx,Plm)
-    print(Plm[:,:,3])
-    tc = time.time()
-    print('Late part of Yv took', tc-tb)
     return(Plm)
 
 def compute_der_table(Nl,Nx,xmax,Yv):
@@ -153,16 +136,15 @@ def compute_der_table(Nl,Nx,xmax,Yv):
     return(Yd)
 
 def normalize(Nl, Y):
+    #
+    def multiply_row(row, scaling_factor):
+        return row * scaling_factor[:,None]
+    #
     ells = jnp.arange(0, Nl, dtype='int32')
     fact = jnp.sqrt((2 * ells + 1) / 4. / np.pi)
     # Roll to adapt to the indexing convention indx = lambda ell, m: (m, ell-m)
     fact = jnp.array([jnp.roll(fact, -i) for i in range(len(fact))])
-    # Zero-out spurious entries
-    #fact = fact * jnp.triu(jnp.zeros((Nl,Nl)))
     return  vmap(multiply_row, (1,0), 1)(Y, fact)
-
-def multiply_row(row, scaling_factor):
-    return row * scaling_factor[:,None]
 
 
 class DirectSHT:
@@ -175,20 +157,15 @@ class DirectSHT:
         """
         self.Nell, self.Nx, self.xmax = Nell, Nx, xmax
         xx = jnp.arange(Nx)/float(Nx-1) * xmax
-        t0 = time.time()
         Yv = compute_Plm_table(Nell,Nx,xmax)
-        t1 = time.time()
-        print('done with Yv', t1-t0)
         Yd = compute_der_table(Nell,Nx,xmax,Yv)
-        t2 = time.time()
-        print('done with Yd',t2-t1)
         # And finally put in the (2ell+1)/4pi normalization:
         Yv, Yd = [normalize(Nell, Y) for Y in [Yv, Yd]]
-        normalize
-        t3 = time.time()
-        print('done normalizing',t3-t2)
+        # Zero-out spurious entries (artifacts of our implementation)
+        mask = jnp.triu(jnp.ones((Nell,Nell)))
+        mask = jnp.array([jnp.roll(mask[i,:], -i) for i in range(len(mask))])
+        Yv, Yd = [Y*mask[:,:,None] for Y in [Yv, Yd]]
         self.x,self.Yv,self.Yd = xx,Yv,Yd
-        print('done here')
         #
 
     def __call__(self,theta,phi,wt,reg_factor=1.,verbose=True):
