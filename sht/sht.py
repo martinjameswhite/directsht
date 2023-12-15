@@ -84,25 +84,6 @@ def compute_Plm_table(Nl, Nx, xmax):
                                            - (ell + m - 1) * Ylm_at_m[i2, :] * fact2)
                                           * fact1 / (ell - m))
         return Ylm_at_m
-
-    @jit
-    def norm(m, i, Ylm_at_m_ell):
-        # Get ell in our indexing scheme where indx = lambda ell, m: (m, ell - m)
-        ell = m + i
-        return Ylm_at_m_ell.at[:].multiply(jnp.sqrt((2 * ell + 1) / 4. / np.pi))
-
-    def norm_ext(Yv):
-        '''
-        Normalize the Ylm's by the (2ell+1)/4pi factor relating Plm to Ylm
-        :param Yv: jnp.ndarray of shape (Nl, Nl, Nx) containing the Plm's
-        :return: jnp.ndarray of shape (Nl, Nl, Nx) containing the (2ell+1)/4pi Ylm
-        '''
-        rows = jnp.arange(0, Nl, dtype='int32')
-        cols = jnp.arange(0, Nl, dtype='int32')
-        # This is effectively a loop over ms and ells, multiplying each entry by the norm
-        return vmap(vmap(norm, (0, None, 0)),
-                    (None, 0, 0))(rows, cols, Yv)
-
     #
     # This should match the convention used in the SHT class below.
     # We shift all the entries so that rows start at ell=m. This helps recursion.
@@ -127,8 +108,6 @@ def compute_Plm_table(Nl, Nx, xmax):
     Plm = move_to_device(Plm)
     # Finally fill in ell>m+1:
     Plm = ext_slow_recurrence(xx, Plm)
-    # Multiply by the  (2ell+1)/4pi normalization factor relating Plm to Ylm
-    Plm = norm_ext(Plm)
     return (Plm)
 
 
@@ -145,17 +124,20 @@ def compute_der_table(Nl, Nx, xmax, Yv):
     #
     def ext_der_slow_recurrence(Nl, xx, Yv, Yd):
         omx2 = 1.0 - xx ** 2
-        ms = jnp.arange(0, Nl, dtype='int32')
-        ells = jnp.arange(0, Nl, dtype='int32')
-        return vmap(vmap(full_fun_dYlm, (0, None, None, 0, None, None)),
-                    (None, 0, 0, 0, None, None))(ells, ms, Yv, Yd, xx, omx2)
+        rows = jnp.arange(0, Nl, dtype='int32')
+        cols = jnp.arange(0, Nl, dtype='int32')
+        return vmap(vmap(full_fun_dYlm, (0, None, 0, 0, None, None)),
+                    (None, 0, None, 0, None, None), 1)(rows, cols, Yv, Yd, xx, omx2)
 
     @jit
-    def full_fun_dYlm(ell, m, Yv_at_m, Yd_at_ell_m, xx, omx2):
-        indx = lambda ell, m: (m, ell - m)
-        i0, i1 = indx(ell, m), indx(ell - 1, m)
+    def full_fun_dYlm(m, i, Yv_at_m, Yd_at_ell_m, xx, omx2):
+        # Our indexing scheme is (m, ell-m), so we can get ell from the loop index as
+        ell = m + i
+        i0, i1 = i, i - 1
+        #indx = lambda ell, m: (m, ell - m)
+        #i0, i1 = indx(ell, m), indx(ell - 1, m)
         fact = jnp.sqrt(1.0 * (ell - m) / (ell + m))
-        Yd_at_ell_m = Yd_at_ell_m.at[:].set((ell + m) * fact * Yv_at_m[i1[1], :] - ell * xx * Yv_at_m[i0[1], :])
+        Yd_at_ell_m = Yd_at_ell_m.at[:].set((ell + m) * fact * Yv_at_m[i1, :] - ell * xx * Yv_at_m[i0, :])
         return Yd_at_ell_m.at[:].divide(omx2)
 
     #
@@ -166,11 +148,28 @@ def compute_der_table(Nl, Nx, xmax, Yv):
     Yd = utils.init_array(Nl, Nx, N_devices)
     # then build the m>0 tables.
     Yd = ext_der_slow_recurrence(Nl, xx, Yv, Yd)
-    # Do ell=1, m=0. Note that ell=0, m=0 is already done (it's zero).
+    # Do ell=1, m=0 and ell=0, m=0, which the recursion can't give us.
     Yd = Yd.at[indx(1, 0)[0], indx(1, 0)[1], :].set(jnp.ones_like(xx))
     Yd = Yd.at[indx(0, 0)[0], indx(0, 0)[1], :].set(jnp.zeros_like(xx))
     return (Yd)
 
+@jit
+def norm(m, i, Ylm_at_m_ell):
+    # Get ell in our indexing scheme where indx = lambda ell, m: (m, ell - m)
+    ell = m + i
+    return Ylm_at_m_ell.at[:].multiply(jnp.sqrt((2 * ell + 1) / 4. / np.pi))
+
+def norm_ext(Yv, Nl):
+    '''
+    Normalize the Ylm's by the (2ell+1)/4pi factor relating Plm to Ylm
+    :param Yv: jnp.ndarray of shape (Nl, Nl, Nx) containing the Plm's
+    :return: jnp.ndarray of shape (Nl, Nl, Nx) containing the (2ell+1)/4pi Ylm
+    '''
+    rows = jnp.arange(0, Nl, dtype='int32')
+    cols = jnp.arange(0, Nl, dtype='int32')
+    # This is effectively a loop over ms and ells, multiplying each entry by the norm
+    return vmap(vmap(norm, (0, None, 0)),
+                (None, 0, 0))(rows, cols, Yv)
 
 class DirectSHT:
     """Brute-force spherical harmonic transforms."""
@@ -189,6 +188,8 @@ class DirectSHT:
         xx = jnp.arange(Nx) / float(Nx - 1) * xmax
         Yv = compute_Plm_table(Nell, Nx, xmax)
         Yd = compute_der_table(Nell, Nx, xmax, Yv)
+        # Multiply by the  (2ell+1)/4pi normalization factor relating Plm to Ylm
+        Yv, Yd = [norm_ext(Y, self.Nell) for Y in [Yv, Yd]]
         if null_unphysical:
             # Zero-out spurious entries (artefacts of our implementation)
             mask = jnp.triu(jnp.ones((Nell, Nell)))
