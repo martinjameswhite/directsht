@@ -2,6 +2,7 @@ import numpy as np
 try:
     jax_present = True
     import jax
+    from jax import jit, lax
     from jax.sharding import PositionalSharding
     from jax.experimental import mesh_utils
     # Choose the number of devices we'll be parallelizing across
@@ -123,6 +124,20 @@ def move_to_device(arr, axis=0, verbose=False):
         # Visualize the sharding
         jax.debug.visualize_array_sharding(arr)
     return arr
+
+def init_array(Nl, Nx, Ndevices):
+    '''
+    Helper function to initialize empty array with the appropriate sharding
+    structure, as opposed to generating it on a single device and moving it
+    '''
+    # Initialize sharding scheme
+    sharding = PositionalSharding(mesh_utils.create_device_mesh(N_devices))
+    sharding = sharding.reshape((N_devices, 1, 1))
+    # This is a trick to shard the array at instantiation
+    @partial(jax.jit, static_argnums=(0,1), out_shardings=sharding)
+    def f(Nl,Nx):
+        return jax.numpy.zeros((Nl, Nl, Nx))
+    return f(Nl, Nx)
 
 def pad_to_shard(arr, axis=0):
     '''

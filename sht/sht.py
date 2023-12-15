@@ -82,9 +82,12 @@ def compute_Plm_table(Nl,Nx,xmax):
     # Set up a regular grid of x values.
     xx = jnp.arange(Nx)/float(Nx-1) * xmax
     sx = jnp.sqrt(1-xx**2)
-    Plm= jnp.zeros((Nl,Nl,Nx))
     # Distribute the grid across devices if possible
-    Plm = move_to_device(Plm)
+    t0 = time.time()
+    Plm = jnp.zeros((Nl, Nl, Nx))
+    t1 = time.time()
+    print('Yv init took', t1-t0)
+    #Plm = move_to_device(Plm)
     # First we do the l=m=0 and l=1, m=0 cases
     Plm= Plm.at[indx(0,0)[0],indx(0,0)[1],:].set(jnp.ones_like(xx))
     Plm = Plm.at[indx(1, 0)[0],indx(1, 0)[1], :].set(xx.copy())
@@ -94,8 +97,18 @@ def compute_Plm_table(Nl,Nx,xmax):
     Plm = fori_loop(1, Nl, lambda m, Plms: get_mhigh(m, Plms, sx), Plm)
     # Now do m=ell-1
     Plm = fori_loop(1, Nl-1, lambda m, Plms: get_misellm1(m, Plms, xx), Plm)
+    t2 = time.time()
+    print('precompute Yv took', t2-t1)
+    # Now we distribute/shard it across GPUS. Note that we should only do this
+    # once we've computed the diagonals, which happens in a direction orthogonal
+    # to our row-based sharding!
+    Plm = move_to_device(Plm)
     # Finally fill in ell>m+1:
+    t3 = time.time()
+    print('moving to device took', t3-t2)
     Plm = ext_slow_recurrence(xx,Plm)
+    t4 = time.time()
+    print('ext Yv took', t4-t2)
     return(Plm)
 
 def compute_der_table(Nl,Nx,xmax,Yv):
@@ -125,9 +138,8 @@ def compute_der_table(Nl,Nx,xmax,Yv):
     xx = jnp.arange(Nx) / float(Nx - 1) * xmax
     # This should match the convention used in the SHT class below.
     indx = lambda ell, m: (m, ell-m)
-    Yd = jnp.zeros_like(Yv)
     # Distribute the grid across devices if possible
-    Yd = move_to_device(Yd)
+    Yd = utils.init_array(Nl, Nx, N_devices)
     # then build the m>0 tables.
     Yd = ext_der_slow_recurrence(Nl,xx,Yv,Yd)
     # Do ell=1, m=0. Note that ell=0, m=0 is already done (it's zero).
@@ -155,16 +167,25 @@ class DirectSHT:
         :param  Nx:   Number of x grid points.
         :param xmax:  Maximum value of |cos(theta)| to compute.
         """
+        t0 = time.time()
         self.Nell, self.Nx, self.xmax = Nell, Nx, xmax
         xx = jnp.arange(Nx)/float(Nx-1) * xmax
         Yv = compute_Plm_table(Nell,Nx,xmax)
+        t1 = time.time()
+        print('Yv took', t1-t0)
         Yd = compute_der_table(Nell,Nx,xmax,Yv)
+        t2 = time.time()
+        print('Yd took', t2-t1)
         # And finally put in the (2ell+1)/4pi normalization:
         Yv, Yd = [normalize(Nell, Y) for Y in [Yv, Yd]]
+        t3 = time.time()
+        print('norm took', t3-t2)
         # Zero-out spurious entries (artifacts of our implementation)
         mask = jnp.triu(jnp.ones((Nell,Nell)))
         mask = jnp.array([jnp.roll(mask[i,:], -i) for i in range(len(mask))])
         Yv, Yd = [Y*mask[:,:,None] for Y in [Yv, Yd]]
+        t4 = time.time()
+        print('masking took', t4-t3)
         self.x,self.Yv,self.Yd = xx,Yv,Yd
         #
 
