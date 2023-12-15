@@ -175,21 +175,25 @@ def compute_der_table(Nl, Nx, xmax, Yv):
 class DirectSHT:
     """Brute-force spherical harmonic transforms."""
 
-    def __init__(self, Nell, Nx, xmax=0.875):
+    def __init__(self, Nell, Nx, xmax=0.875, null_unphysical=True):
         """Initialize the class, build the interpolation tables.
         :param  Nell: Number of ells, and hence ms.
         :param  Nx:   Number of x grid points.
         :param xmax:  Maximum value of |cos(theta)| to compute.
+        :param null_unphysical: if True, set all Ylm's with ell<m to zero. Otherwise,
+            these entries will return junk when queried (the normal algorithm does not care
+            about this, but setting null_unphysical=False is marginally faster).
         """
         t0 = time.time()
         self.Nell, self.Nx, self.xmax = Nell, Nx, xmax
         xx = jnp.arange(Nx) / float(Nx - 1) * xmax
         Yv = compute_Plm_table(Nell, Nx, xmax)
         Yd = compute_der_table(Nell, Nx, xmax, Yv)
-        # Zero-out spurious entries (artefacts of our implementation)
-        mask = jnp.triu(jnp.ones((Nell, Nell)))
-        mask = jnp.array([jnp.roll(mask[i, :], -i) for i in range(len(mask))])
-        Yv, Yd = [Y * mask[:, :, None] for Y in [Yv, Yd]]
+        if null_unphysical:
+            # Zero-out spurious entries (artefacts of our implementation)
+            mask = jnp.triu(jnp.ones((Nell, Nell)))
+            mask = jnp.array([jnp.roll(mask[i, :], -i) for i in range(len(mask))])
+            Yv, Yd = [Y * mask[:, :, None] for Y in [Yv, Yd]]
         self.x, self.Yv, self.Yd = xx, Yv, Yd
         #
 
