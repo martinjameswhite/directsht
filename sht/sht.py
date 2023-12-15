@@ -84,6 +84,7 @@ def compute_Plm_table(Nl, Nx, xmax):
                                            - (ell + m - 1) * Ylm_at_m[i2, :] * fact2)
                                           * fact1 / (ell - m))
         return Ylm_at_m
+
     #
     # This should match the convention used in the SHT class below.
     # We shift all the entries so that rows start at ell=m. This helps recursion.
@@ -134,11 +135,22 @@ def compute_der_table(Nl, Nx, xmax, Yv):
         # Our indexing scheme is (m, ell-m), so we can get ell from the loop index as
         ell = m + i
         i0, i1 = i, i - 1
-        #indx = lambda ell, m: (m, ell - m)
-        #i0, i1 = indx(ell, m), indx(ell - 1, m)
+        # indx = lambda ell, m: (m, ell - m)
+        # i0, i1 = indx(ell, m), indx(ell - 1, m)
         fact = jnp.sqrt(1.0 * (ell - m) / (ell + m))
-        Yd_at_ell_m = Yd_at_ell_m.at[:].set((ell + m) * fact * Yv_at_m[i1, :] - ell * xx * Yv_at_m[i0, :])
-        return Yd_at_ell_m.at[:].divide(omx2)
+        Yd_at_ell_m = Yd_at_ell_m.at[:].set(((ell + m) * fact * Yv_at_m[i1, :] - ell * xx * Yv_at_m[i0, :]) / omx2)
+        return Yd_at_ell_m
+
+    @jit
+    def fill_dYmm(m, i, Yv_at_m, Yd_at_m, xx, omx2):
+        # Our indexing scheme is (m, ell-m), so we can get ell from the loop index as
+        ell = m + i
+        return Yd_at_m.at[i, :].set((- ell * xx * Yv_at_m[i, :]) / omx2)
+
+    def fill_dYmm_ext(Yv, Yd, xx):
+        omx2 = 1.0 - xx ** 2
+        rows = jnp.arange(0, Nl, dtype='int32')
+        return vmap(fill_dYmm, (0, None, 0, 0, None, None))(rows, 0, Yv, Yd, xx, omx2)
 
     #
     xx = jnp.arange(Nx) / float(Nx - 1) * xmax
@@ -151,13 +163,18 @@ def compute_der_table(Nl, Nx, xmax, Yv):
     # Do ell=1, m=0 and ell=0, m=0, which the recursion can't give us.
     Yd = Yd.at[indx(1, 0)[0], indx(1, 0)[1], :].set(jnp.ones_like(xx))
     Yd = Yd.at[indx(0, 0)[0], indx(0, 0)[1], :].set(jnp.zeros_like(xx))
+    # The zeroth column (i.e. ell=m) is pathological in our implementation
+    # so do it again
+    Yd = fill_dYmm_ext(Yv, Yd, xx)
     return (Yd)
+
 
 @jit
 def norm(m, i, Ylm_at_m_ell):
     # Get ell in our indexing scheme where indx = lambda ell, m: (m, ell - m)
     ell = m + i
     return Ylm_at_m_ell.at[:].multiply(jnp.sqrt((2 * ell + 1) / 4. / np.pi))
+
 
 def norm_ext(Yv, Nl):
     '''
@@ -170,6 +187,7 @@ def norm_ext(Yv, Nl):
     # This is effectively a loop over ms and ells, multiplying each entry by the norm
     return vmap(vmap(norm, (0, None, 0)),
                 (None, 0, 0))(rows, cols, Yv)
+
 
 class DirectSHT:
     """Brute-force spherical harmonic transforms."""
