@@ -5,8 +5,9 @@ import utils
 
 try:
     jax_present = True
-    from jax import jit, vmap, lax, tree_map
+    from jax import jit, vmap
     import jax.numpy as jnp
+    from functools import partial
 except ImportError:
     jax_present = False
     print("JAX not found. Falling back to NumPy.")
@@ -15,6 +16,7 @@ except ImportError:
 
 default_dtype = None # Replace if you want to use a different dtype from the env default
 
+#@partial(jit, donate_argnums=(1,2))
 def get_vs(mmax, phi_data_reshaped, reshaped_inputs, loop_in_JAX=True, N_chunks=None,
            pad=False, verbose=False):
     """
@@ -32,7 +34,7 @@ def get_vs(mmax, phi_data_reshaped, reshaped_inputs, loop_in_JAX=True, N_chunks=
         Default is None, in which case the code will choose the highest value that won't
         exhaust the available memory.
     :param pad: bool. Whether to pad the vectorized dimension to make it divisible by N_chunks.
-        By default (pad=False) we don't do this, and instead we split into the nearest number
+        By default (pad=True) we do this. The alternative is to split into the nearest number
         of equal divisible chunks.
     :return: a tuple of two 3D numpy arrays of shape (mmax+1, 4, bin_num) with the real and
         imaginary parts of the v's at each m.
@@ -82,9 +84,11 @@ def get_vs(mmax, phi_data_reshaped, reshaped_inputs, loop_in_JAX=True, N_chunks=
         # Concatenate the batches
         vs_real, vs_imag = [jnp.concatenate(vs_stacked) for vs_stacked in [vs_real_stacked, vs_imag_stacked]]
         #
+        '''
         if pad:
             # Remove the padding introduced in the current function
             vs_real, vs_imag = vs_real[np.arange(mmax+1, dtype=int),:,:], vs_imag[np.arange(mmax+1, dtype=int),:,:]
+        '''
         return vs_real, vs_imag
 
 #@jit
@@ -128,7 +132,7 @@ def get_vs_at_m(m, phi_data_reshaped, reshaped_inputs):
                   [jnp.cos(m * phi_data_reshaped), jnp.sin(m * phi_data_reshaped)]]
     return vs_r, vs_i
 
-@jit
+@partial(jit, donate_argnums=(0,))
 def collapse(arr):
     '''
     Sum over the second axis of a 2D array -- i.e., the key binning operation!
@@ -138,6 +142,7 @@ def collapse(arr):
     '''
     return jnp.sum(arr, axis=-1)
 
+@partial(jit, donate_argnums=(4,))
 def get_alm_jax(Ylm_i, Ylm_ip1, dYlm_i, dYlm_ip1, vs):
     """
     The key function: get alm by summing over all interpolated, weighted
@@ -153,12 +158,8 @@ def get_alm_jax(Ylm_i, Ylm_ip1, dYlm_i, dYlm_ip1, vs):
     :param vs: jnp array of size (mmax+1,4,Nx) with the v_{i,j}(m)
     :return: a 1D numpy array with the alm value
     """
-    # This is a hack to be able to pass the value of m through the vmap
-    m = Ylm_i[0].astype(int)
 
-    # The actual values of the Ylm's are in the rest of the elemenets i.e. [1:]
-    return(jnp.sum(Ylm_i[1:]*vs[m,0] + dYlm_i*vs[m,1]
-                   + Ylm_ip1[1:]*vs[m,2] + dYlm_ip1*vs[m,3]))
+    return(jnp.sum(Ylm_i*vs[0] + dYlm_i*vs[1] + Ylm_ip1*vs[2] + dYlm_ip1*vs[3]))
 
 def get_alm_np(Ylm_i, Ylm_ip1, dYlm_i, dYlm_ip1, vs, m):
     """

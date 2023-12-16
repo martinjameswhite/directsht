@@ -1,4 +1,5 @@
 import numpy as np
+
 try:
     jax_present = True
     import jax
@@ -6,6 +7,7 @@ try:
     from jax.sharding import PositionalSharding
     from functools import partial
     from jax.experimental import mesh_utils
+
     # Choose the number of devices we'll be parallelizing across
     N_devices = len(jax.devices())
 except ImportError:
@@ -13,7 +15,8 @@ except ImportError:
     N_devices = 1
     print("JAX not found. Falling back to NumPy.")
 
-default_dtype = None # Replace if you want to use a different dtype from the env default
+default_dtype = None  # Replace if you want to use a different dtype from the env default
+
 
 def find_transitions(arr):
     '''
@@ -32,6 +35,7 @@ def find_transitions(arr):
     transition_indices = np.append(transition_indices, None)
     return transition_indices
 
+
 def reshape_phi_array(data, bin_edges, bin_num, bin_len):
     '''
     Reshape a 1D array into a 2D array to facilitate binning in computation of v's
@@ -45,9 +49,10 @@ def reshape_phi_array(data, bin_edges, bin_num, bin_len):
     '''
     data_reshaped = np.zeros((bin_num, bin_len), dtype=default_dtype)
     for i in range(bin_num):
-        fill_in = data[bin_edges[i]:bin_edges[i+1]]
-        data_reshaped[i,:len(fill_in)] = fill_in
+        fill_in = data[bin_edges[i]:bin_edges[i + 1]]
+        data_reshaped[i, :len(fill_in)] = fill_in
     return data_reshaped
+
 
 def reshape_aux_array(inputs, bin_edges, bin_num, bin_len):
     '''
@@ -62,12 +67,13 @@ def reshape_aux_array(inputs, bin_edges, bin_num, bin_len):
             with fewer than bin_len points
     '''
     # Dimensions: vs label, bin_num, bin_len
-    data_reshaped = np.zeros((4,bin_num, bin_len), dtype=default_dtype)
+    data_reshaped = np.zeros((4, bin_num, bin_len), dtype=default_dtype)
     for i in range(bin_num):
         for j, input_ in enumerate(inputs):
-            fill_in = input_[bin_edges[i]:bin_edges[i+1]]
-            data_reshaped[j,i,:len(fill_in)] = fill_in
+            fill_in = input_[bin_edges[i]:bin_edges[i + 1]]
+            data_reshaped[j, i, :len(fill_in)] = fill_in
     return data_reshaped
+
 
 def getlm(lmax, szalm, i=None):
     '''
@@ -80,7 +86,7 @@ def getlm(lmax, szalm, i=None):
     if i is None:
         i = np.arange(szalm)
     assert (
-        np.max(i) < szalm
+            np.max(i) < szalm
     ), "Invalid index, it should less than the max alm array length of {}".format(
         szalm
     )
@@ -93,6 +99,7 @@ def getlm(lmax, szalm, i=None):
         ).astype(int)
         l = i - m * (2 * lmax + 1 - m) // 2
     return (l, m)
+
 
 def move_to_device(arr, axis=0, pad_axes=None, verbose=False):
     '''
@@ -109,7 +116,7 @@ def move_to_device(arr, axis=0, pad_axes=None, verbose=False):
     '''
     if pad_axes is None:
         pad_axes = axis
-    if axis==1:
+    if axis == 1:
         assert len(arr.shape) == 3, "Only sharding along axis=1 is supported for 3D arrays"
     # Initialize sharding scheme
     sharding = PositionalSharding(mesh_utils.create_device_mesh(N_devices))
@@ -130,7 +137,8 @@ def move_to_device(arr, axis=0, pad_axes=None, verbose=False):
         jax.debug.visualize_array_sharding(arr)
     return arr
 
-def init_array(Nl, Nx, Ndevices, axes=[0,1]):
+
+def init_array(Nl, Nx, Ndevices, axes=[0, 1]):
     '''
     Helper function to initialize empty array with the appropriate sharding
     structure, as opposed to generating it on a single device and moving it
@@ -140,10 +148,12 @@ def init_array(Nl, Nx, Ndevices, axes=[0,1]):
     # Initialize sharding scheme
     sharding = PositionalSharding(mesh_utils.create_device_mesh(N_devices))
     sharding = sharding.reshape((N_devices, 1, 1))
+
     # This is a trick to shard the array at instantiation
-    @partial(jax.jit, static_argnums=(0,1,2), out_shardings=sharding)
-    def f(Nl,Nx,axes=[0,1]):
+    @partial(jax.jit, static_argnums=(0, 1, 2), out_shardings=sharding)
+    def f(Nl, Nx, axes=[0, 1]):
         return pad_to_shard(jax.numpy.zeros((Nl, Nl, Nx)), axes)
+
     return f(Nl, Nx)
 
 
@@ -175,6 +185,7 @@ def pad_to_shard(arr, axes=0):
                 raise TypeError("Input array must be a numpy or JAX array")
     return arr
 
+
 def unpad(arr, unpadded_len, axis=0):
     '''
     Remove the padding we applied to enable sharding, first checking whether
@@ -199,6 +210,7 @@ def unpad(arr, unpadded_len, axis=0):
         # No need for unpadding
         return arr
 
+
 def predict_memory_usage(num_elements, dtype):
     '''
     Predict the memory usage of an array of a given size and dtype
@@ -214,3 +226,31 @@ def predict_memory_usage(num_elements, dtype):
     # Calculate total memory usage in bytes
     total_memory = element_size * num_elements
     return total_memory
+
+
+def to_hp_convention(alm_grid_real, alm_grid_imag):
+    '''
+    Get a 1D vector of alms in the healpy convention from a 2D array of alms
+    :param alm: np.ndarray
+        2D array of size (Nl, Nl) with alms in the indexing convention where the ith
+        row corresponds to i=m and  the jth column corresponds to j=ell-m
+    :return: np.ndarray
+        1D array of alms in Healpy convention
+    '''
+
+    def flatten_mat(mat, flat_idx):
+        # First roll so it looks like an upper triangular matrix. Then extract the
+        # upper triangular indices
+        return np.array([np.roll(mat[i, :], i) for i in range(len(mat))])[flat_idx]
+
+    assert alm_grid_real.shape == alm_grid_imag.shape, "Input arrays must have the same shape"
+    # Get the size of the alm array
+    Nl = alm_grid_real.shape[0]
+    # Initialize the output array
+    alm_hp = np.zeros((Nl * (Nl + 1)) // 2, dtype='complex128')
+    # Fill in the output array
+    flat_idx = np.triu_indices(alm_grid_real.shape[0])
+
+    alm_real, alm_imag = [flatten_mat(mat, flat_idx) for mat in [alm_grid_real, alm_grid_imag]]
+    alm_hp = alm_real - 1j * alm_imag
+    return alm_hp

@@ -204,7 +204,6 @@ class DirectSHT:
             these entries will return junk when queried (the normal algorithm does not care
             about this, but setting null_unphysical=False is marginally faster).
         """
-        t0 = time.time()
         self.Nell, self.Nx, self.xmax = Nell, Nx, xmax
         xx = jnp.arange(Nx) / float(Nx - 1) * xmax
         Yv = compute_Plm_table(Nell, Nx, xmax)
@@ -248,7 +247,7 @@ class DirectSHT:
         wt *= reg_factor
         # Get the indexing of ell and m in the Healpix convention for
         # later use
-        ell_ordering, m_ordering = utils.getlm(self.Nell - 1, len(self.Yv[:, 0]))
+        ell_ordering, m_ordering = utils.getlm(self.Nell - 1, (self.Nell * (self.Nell + 1)) // 2)
         # Eventually, we will need to multiply the alm's by (-1)^{ell-m}
         # for x=cos\theta<0
         parity_factor = (-1) ** (ell_ordering - m_ordering)
@@ -275,6 +274,7 @@ class DirectSHT:
         else:
             raise ValueError("The theta array seems to be empty!")
 
+        '''
         # If working on GPU, move arrays to device.
         tm2 = time.time()
         if jax_present:
@@ -285,7 +285,7 @@ class DirectSHT:
         self.Yd = move_to_device(self.Yd)
         tm1 = time.time()
         if verbose: print("Moving to GPU took ", tm1 - tm2, " seconds.", flush=True)
-
+        '''
         #
         # Treat +ve and -ve x separately
         for x, par_fact, idx in which_case:
@@ -337,20 +337,19 @@ class DirectSHT:
                 # Remove zero-padding introduced when sharding to calculate v's
                 vs_real, vs_imag = [vs[:, :, np.arange(bin_num, dtype=int)] for vs in [vs_real, vs_imag]]
                 # Get a grid of all alm's by batching over (ell,m) -- best run on a GPU!
-                get_all_alms_w_jax = vmap(jit(interp.get_alm_jax), in_axes=(0, 0, 0, 0, None))
+                get_all_alms_w_jax = vmap(vmap(interp.get_alm_jax, (0, 0, 0, 0, 0)), (0, 0, 0, 0, None))
                 # Note that we use a hack to pass the m value through vmap as the first element of every row of Yv
                 # We also scale derivatives by dx
-                alm_grid_real = get_all_alms_w_jax(self.Yv[:, np.insert(occupied_bins + 1, 0, 0)],
-                                                   self.Yv[:, np.insert(occupied_bins + 2, 0, 0)],
-                                                   dx * self.Yd[:, occupied_bins], dx * self.Yd[:, occupied_bins + 1],
+                alm_grid_real = get_all_alms_w_jax(self.Yv[:, :, occupied_bins], self.Yv[:, :, occupied_bins + 1],
+                                                   dx * self.Yd[:, :, occupied_bins],
+                                                   dx * self.Yd[:, :, occupied_bins + 1],
                                                    vs_real)
-                alm_grid_imag = get_all_alms_w_jax(self.Yv[:, np.insert(occupied_bins + 1, 0, 0)],
-                                                   self.Yv[:, np.insert(occupied_bins + 2, 0, 0)],
-                                                   dx * self.Yd[:, occupied_bins], dx * self.Yd[:, occupied_bins + 1],
+                alm_grid_imag = get_all_alms_w_jax(self.Yv[:, :, occupied_bins], self.Yv[:, :, occupied_bins + 1],
+                                                   dx * self.Yd[:, :, occupied_bins],
+                                                   dx * self.Yd[:, :, occupied_bins + 1],
                                                    vs_imag)
-                # Combine real and imaginary parts of the alms
-                alm_grid = (np.array(alm_grid_real, dtype='complex128')
-                            - 1j * np.array(alm_grid_imag, dtype='complex128'))
+                # Combine real and imaginary parts of the alms, and adapt to healpy convention
+                alm_grid = utils.to_hp_convention(alm_grid_real, alm_grid_imag)
                 # If we introduced padding when sharding, remove it
                 alm_grid = utils.unpad(alm_grid, len(ell_ordering))
             else:
@@ -370,8 +369,6 @@ class DirectSHT:
             t3 = time.time()
             if verbose:
                 print("Computing alm's took ", t3 - t2, " seconds.", flush=True)
-        # Undo the hack
-        self.Yv = self.Yv[:, 1:]
         return (alm_grid_tot / reg_factor)
         #
 
