@@ -20,6 +20,7 @@ try:
     import jax.numpy as jnp
     from functools import partial
     from jax.lax import fori_loop
+    import jax
 
     # Choose the number of devices we'll be parallelizing across
     N_devices = len(devices())
@@ -273,19 +274,6 @@ class DirectSHT:
                              [neg_idx])
         else:
             raise ValueError("The theta array seems to be empty!")
-
-        '''
-        # If working on GPU, move arrays to device.
-        tm2 = time.time()
-        if jax_present:
-            # This is a hack to be able to pass the m value through vmap later on
-            self.Yv = move_to_device(np.insert(self.Yv, 0, m_ordering, axis=1))
-        else:
-            self.Yv = move_to_device(self.Yv)
-        self.Yd = move_to_device(self.Yd)
-        tm1 = time.time()
-        if verbose: print("Moving to GPU took ", tm1 - tm2, " seconds.", flush=True)
-        '''
         #
         # Treat +ve and -ve x separately
         for x, par_fact, idx in which_case:
@@ -337,7 +325,7 @@ class DirectSHT:
                 # Remove zero-padding introduced when sharding to calculate v's
                 vs_real, vs_imag = [vs[:, :, np.arange(bin_num, dtype=int)] for vs in [vs_real, vs_imag]]
                 # Get a grid of all alm's by batching over (ell,m) -- best run on a GPU!
-                get_all_alms_w_jax = vmap(vmap(interp.get_alm_jax, (0, 0, 0, 0, 0)), (0, 0, 0, 0, None))
+                get_all_alms_w_jax = vmap(vmap(interp.get_alm_jax, (0, 0, 0, 0, None)), (0, 0, 0, 0, 0))
                 # Note that we use a hack to pass the m value through vmap as the first element of every row of Yv
                 # We also scale derivatives by dx
                 alm_grid_real = get_all_alms_w_jax(self.Yv[:, :, occupied_bins], self.Yv[:, :, occupied_bins + 1],
