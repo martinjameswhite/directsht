@@ -33,7 +33,6 @@ except ImportError:
     N_devices = 1
 
 
-# @partial(jit, static_argnums=(0,1,2))
 def compute_Plm_table(Nl, Nx, xmax):
     """Use recurrence relations to compute a table of Ylm[cos(theta),0]
     for ell>=0, m>=0, x>=0.  Can use symmetries to get m<0 and/or x<0,
@@ -44,15 +43,15 @@ def compute_Plm_table(Nl, Nx, xmax):
     normalization (that is applied in __init__)
     """
 
-    #
-    @jit
+    # We donate argnums to enforce in-place array updates
+    @partial(jit, donate_argnums=(1,))
     def get_mhigh(m, Plm, sx):
         indx = lambda ell, m: (m, ell - m)
         i0, i1 = indx(m, m), indx(m - 1, m - 1)
         return Plm.at[i0[0], i0[1], :].set(-jnp.sqrt(1.0 - 1. / (2 * m)) * sx * Plm[i1[0], i1[1], :])
 
     #
-    @jit
+    @partial(jit, donate_argnums=(1,))
     def get_misellm1(m, Plm, xx):
         indx = lambda ell, m: (m, ell - m)
         i0, i1 = indx(m, m), indx(m + 1, m)
@@ -65,14 +64,14 @@ def compute_Plm_table(Nl, Nx, xmax):
         return vmap(partial_fun_Ylm, (0, 0, None))(jnp.arange(0, Plm.shape[0], dtype='int32'), Plm, xx)
 
     #
-    @jit
+    @partial(jit, donate_argnums=(1,))
     def partial_fun_Ylm(m, Ylm_row, xx):
         # Ylm_row.shape = (Nl, Nx)
         body_fun = lambda ell, Ylm_at_m: full_fun_Ylm(ell, m, Ylm_at_m, xx)
         return fori_loop(0, len(Ylm_row) - 2, body_fun, Ylm_row)
 
     #
-    @jit
+    @partial(jit, donate_argnums=(2,))
     def full_fun_Ylm(i, m, Ylm_at_m, xx):
         # Our indexing scheme is (m, ell-m), so since the loops start at the third column
         # (i.e. ell=m+2) we can get ell from the loop index as
@@ -132,7 +131,7 @@ def compute_der_table(Nl, Nx, xmax, Yv):
         return vmap(vmap(full_fun_dYlm, (0, None, 0, 0, None, None)),
                     (None, 0, None, 0, None, None), 1)(rows, cols, Yv, Yd, xx, omx2)
 
-    @jit
+    @partial(jit, donate_argnums=(3,))
     def full_fun_dYlm(m, i, Yv_at_m, Yd_at_ell_m, xx, omx2):
         # Our indexing scheme is (m, ell-m), so we can get ell from the loop index as
         ell = m + i
@@ -143,7 +142,7 @@ def compute_der_table(Nl, Nx, xmax, Yv):
         Yd_at_ell_m = Yd_at_ell_m.at[:].set(((ell + m) * fact * Yv_at_m[i1, :] - ell * xx * Yv_at_m[i0, :]) / omx2)
         return Yd_at_ell_m
 
-    @jit
+    @partial(jit, donate_argnums=(3,))
     def fill_dYmm(m, i, Yv_at_m, Yd_at_m, xx, omx2):
         # Our indexing scheme is (m, ell-m), so we can get ell from the loop index as
         ell = m + i
@@ -172,7 +171,7 @@ def compute_der_table(Nl, Nx, xmax, Yv):
     return (Yd)
 
 
-@jit
+@partial(jit, donate_argnums=(2,))
 def norm(m, i, Ylm_at_m_ell):
     # Get ell in our indexing scheme where indx = lambda ell, m: (m, ell - m)
     ell = m + i
