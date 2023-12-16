@@ -301,15 +301,14 @@ class DirectSHT:
             # Reshape the inputs into a 2D array for fast binning during
             # computation of the v's. Our binning scheme involves zero-padding bins with fewer
             # than bin_len points, but cos(0)=1!=0, so we need a mask to discard spurious zeros!
-            mask = utils.reshape_phi_array(np.ones_like(phi_data_sorted), transitions, bin_num, bin_len)
+            mask = utils.reshape_phi_array(np.ones_like(phi_data_sorted), transitions)
             # Mask and put in GPU memory, distributing across devices if possible
-            reshaped_phi_data = move_to_device(mask * utils.reshape_phi_array(phi_data_sorted,
-                                                                              transitions, bin_num, bin_len))
+            reshaped_phi_data = move_to_device(mask * utils.reshape_phi_array(phi_data_sorted, transitions))
             # Repeat the process for the other required inputs
             reshaped_inputs = utils.reshape_aux_array([w_i_sorted * input_ for input_ in
                                                        [(2 * t + 1) * (1 - t) ** 2, t * (1 - t) ** 2,
                                                         t ** 2 * (3 - 2 * t)
-                                                           , t ** 2 * (t - 1)]], transitions, bin_num, bin_len)
+                                                           , t ** 2 * (t - 1)]], transitions)
             reshaped_inputs = move_to_device(mask * reshaped_inputs, axis=1)
             #
             t15 = time.time()

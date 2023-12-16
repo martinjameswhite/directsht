@@ -29,14 +29,10 @@ def find_transitions(arr):
     differences = np.diff(arr)
     # Find the indices where differences are non-zero
     transition_indices = np.nonzero(differences)[0] + 1
-    # Prepend beginning index
-    transition_indices = np.insert(transition_indices, 0, 0, axis=0)
-    # For indexing convenience, append None to the end
-    transition_indices = np.append(transition_indices, None)
     return transition_indices
 
 
-def reshape_phi_array(data, bin_edges, bin_num, bin_len):
+def reshape_phi_array(data, bin_edges):
     '''
     Reshape a 1D array into a 2D array to facilitate binning in computation of v's
     :param data: 1D numpy array of data to be binned
@@ -47,32 +43,38 @@ def reshape_phi_array(data, bin_edges, bin_num, bin_len):
     :return: 2D numpy array of shape (bin_num, bin_len), zero padded in bins
             with fewer than bin_len points
     '''
-    data_reshaped = np.zeros((bin_num, bin_len), dtype=default_dtype)
-    for i in range(bin_num):
-        fill_in = data[bin_edges[i]:bin_edges[i + 1]]
-        data_reshaped[i, :len(fill_in)] = fill_in
-    return data_reshaped
+    # Split the data into bins bounded by interpolation nodes
+    split_arr = np.split(data, bin_edges, axis=0)
+    # Find the maximum length of the subarrays
+    max_length = max(subarray.shape[0] for subarray in split_arr)
+    # Zero-pad the subarrays to the maximum length
+    padded_arrs = [np.pad(subarray, (0, max_length - subarray.shape[0]),
+                                 mode='constant') for subarray in split_arr]
+    # Stack the padded subarrays vertically
+    return np.stack(padded_arrs, axis=0)
 
 
-def reshape_aux_array(inputs, bin_edges, bin_num, bin_len):
+def reshape_aux_array(inputs, bin_edges):
     '''
     Reshape the four auxiliary 1D arrays into a 2D array shaped in such a way
     to facilitate binning during computation of the v's.
     :param inputs: list of four 1D numpy array of data to be binned
     :param bin_edges:  1D numpy array of indices where the values in data go
             from one bin to the next. Must include 0 and a None at the end.
-    :param bin_num: int. Number of bins where there is data
-    :param bin_len: int. Maximum number of points in a bin
     :return: 2D numpy array of shape (4, bin_num, bin_len), zero padded in bins
             with fewer than bin_len points
     '''
-    # Dimensions: vs label, bin_num, bin_len
-    data_reshaped = np.zeros((4, bin_num, bin_len), dtype=default_dtype)
-    for i in range(bin_num):
-        for j, input_ in enumerate(inputs):
-            fill_in = input_[bin_edges[i]:bin_edges[i + 1]]
-            data_reshaped[j, i, :len(fill_in)] = fill_in
-    return data_reshaped
+    # Stack list of inputs into a (4, Npnt) array
+    inputs_arr = np.vstack(inputs)
+    # Split the data into bins bounded by interpolation nodes
+    split_arr = np.split(inputs_arr, bin_edges, axis=1)
+    # Find the maximum length of the subarrays
+    max_length = max(subarray.shape[1] for subarray in split_arr)
+    # Zero-pad the subarrays along axis=1 to the maximum length
+    padded_arrs = [np.pad(subarray, ((0, 0), (0, max_length - subarray.shape[1])),
+                                 mode='constant') for subarray in split_arr]
+    # Stack the padded subarrays vertically
+    return np.stack(padded_arrs, axis=1)
 
 
 def getlm(lmax, szalm, i=None):
