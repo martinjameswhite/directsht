@@ -1,4 +1,5 @@
 # direct_sht
+
 Direct spherical harmonic transform code for point sets on the sphere.
 
 The code can be installed with
@@ -13,8 +14,8 @@ if JAX is not present.  Some of the notebooks use healpy for visualization.
 
 ## Usage
 
-The code is relatively straightforward to use.  Given a set of points
-defined by arrays of theta and phi (in radians) and weights the DirectSHT
+The code is relatively straightforward to use.  Given a set of points,
+defined by arrays of theta and phi (in radians) and weights, the DirectSHT
 class can be called to provide the spherical harmonic transform coefficients
 alm.
 
@@ -22,9 +23,9 @@ First import the main class and create an instance:
 ```
 from sht.sht import DirectSHT
 
-# The class takes a number of multipoles to cmopute (lmax=Nl-1)
+# The class takes a number of multipoles to compute (lmax=Nl-1)
 # and the number of spline points for interpolation.
-# Typically Nx ~ 2 Nl is a good choice.
+# Typically Nx ~ 2 Nl is a conservative choice.
 Nl = 500
 Nx = 1024 
 # Generate an instance of the class.
