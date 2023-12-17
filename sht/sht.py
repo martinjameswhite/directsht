@@ -113,18 +113,19 @@ class DirectSHT:
         # Treat +ve and -ve x separately
         for x, par_fact, idx in which_case:
             t0 = time.time()
-            # Sort the data in ascending order of theta
-            sorted_idx = np.argsort(x)
+            # Find which spline region each point falls into
+            spline_idx = np.digitize(x, x_samples) - 1
+            # Reorder the data in bins (we don't care about specific order inside bin)
+            sorted_idx = np.argsort(spline_idx)
+            spline_idx = spline_idx[sorted_idx]
             x_data_sorted = x[sorted_idx]
             w_i_sorted = wt[idx][sorted_idx]
             phi_data_sorted = phi[idx][sorted_idx]
+            # Calculate the t's we'll need when interpolating
+            t = (x_data_sorted - x_samples[spline_idx]) / dx
             #
             t1 = time.time()
-            if verbose: print("Sorting took ", t1 - t0, " seconds.", flush=True)
-            #
-            # Find which spline region each point falls into
-            spline_idx = np.digitize(x_data_sorted, x_samples) - 1
-            t = (x_data_sorted - x_samples[spline_idx]) / dx
+            if verbose: print("Sorting & digitizing took ", t1 - t0, " seconds.", flush=True)
             #
             # Find which bins (bounded by the elements of x_samples) are populated
             occupied_bins = np.unique(spline_idx)
@@ -144,7 +145,7 @@ class DirectSHT:
             reshaped_inputs = move_to_device(mask * reshaped_inputs, axis=1)
             #
             t15 = time.time()
-            if verbose: print("Digitizing & reshaping took ", t15 - t1, " seconds.", flush=True)
+            if verbose: print("Reshaping took ", t15 - t1, " seconds.", flush=True)
             #
             # Precompute the v's
             vs_real, vs_imag = interp.get_vs(self.Nell - 1, reshaped_phi_data, reshaped_inputs)
