@@ -95,8 +95,7 @@ class DirectSHT:
         x_full = np.cos(theta)
         # Split into positive and negative values of x.
         # We'll treat them separately and rejoin them ar the very end
-        pos_idx, neg_idx = ([i for i, value in enumerate(x_full) if value >= 0], \
-                            [i for i, value in enumerate(x_full) if value < 0])
+        pos_idx, neg_idx =  np.where(x_full >= 0)[0], np.where(x_full < 0)[0]
         if pos_idx and neg_idx:
             # The case where there's both +ve and -ve values of x
             which_case = zip([x_full[pos_idx], np.abs(x_full[neg_idx])], \
