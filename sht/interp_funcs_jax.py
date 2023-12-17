@@ -1,6 +1,6 @@
 import numpy as np
 import psutil
-import utils_py
+import utils_jax as utils
 #from functools import partial
 
 

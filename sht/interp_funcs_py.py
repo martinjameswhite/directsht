@@ -1,6 +1,6 @@
 import numpy as np
 import psutil
-import utils_py
+import utils_py as utils
 #from functools import partial
 
 try:

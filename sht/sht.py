@@ -31,18 +31,20 @@ except ImportError:
 
 class DirectSHT:
     """Brute-force spherical harmonic transforms."""
-    def __init__(self, Nell, Nx, xmax=0.875, null_unphysical=True):
+    def __init__(self, Nell, Nx, xmax=0.875, dflt_type='float64', null_unphysical=True):
         """Initialize the class, build the interpolation tables.
         :param  Nell: Number of ells, and hence ms.
         :param  Nx:   Number of x grid points.
         :param xmax:  Maximum value of |cos(theta)| to compute.
+        :param dflt_type: str. Default dtype to use for all arrays. Defaults to 'float64'.
+            Double precision is strongly recommended.
         :param null_unphysical: bool. Only has an effect if jax_present=True. If True,
             set all Ylm's with ell<m to zero. Otherwise, these entries will return junk
             when queried (the normal algorithm does not care about this, but setting
             null_unphysical=False is marginally faster).
         """
         self.Nell, self.Nx, self.xmax = Nell, Nx, xmax
-        xx = jnp.arange(Nx) if jax_present else np.arange(Nx)
+        xx = jnp.arange(Nx, dtype=dflt_type) if jax_present else np.arange(Nx, dtype=dflt_type)
         xx *= xmax / float(Nx - 1)
         Yv = legendre.compute_Plm_table(Nell, Nx, xmax)
         Yd = legendre.compute_der_table(Nell, Nx, xmax, Yv)
