@@ -6,10 +6,7 @@
 #
 #
 import numpy as np
-import interp_funcs as interp
-import utils
 import time
-from scipy.stats import mode
 
 try:
     jax_present = True
@@ -21,7 +18,9 @@ try:
     from functools import partial
     from jax.lax import fori_loop
     import jax
-
+    import legendre_jax as legendre
+    import interp_funcs_jax as interp
+    import utils_jax as utils
     # Choose the number of devices we'll be parallelizing across
     N_devices = len(devices())
 except ImportError:
@@ -30,167 +29,12 @@ except ImportError:
     print("JAX not found. Falling back to NumPy.")
     import numpy as jnp
     from numba import njit as jit
-
+    import legendre_py as legendre
+    import interp_funcs_py as interp
+    import utils_py as utils
     N_devices = 1
 
 
-def compute_Plm_table(Nl, Nx, xmax):
-    """Use recurrence relations to compute a table of Ylm[cos(theta),0]
-    for ell>=0, m>=0, x>=0.  Can use symmetries to get m<0 and/or x<0,
-    viz. (-1)^m for m<0 and (-1)^(ell-m) for x<0.
-    :param  Nl: Number of ells (and hence m's) in the grid.
-    :param  xx: Array of x points (non-negative and increasing).
-    :return Y[ell,m,x=Cos[theta],0] without the sqrt{(2ell+1)/4pi}
-    normalization (that is applied in __init__)
-    """
-
-    # We donate argnums to enforce in-place array updates
-    @partial(jit, donate_argnums=(1,))
-    def get_mhigh(m, Plm, sx):
-        indx = lambda ell, m: (m, ell - m)
-        i0, i1 = indx(m, m), indx(m - 1, m - 1)
-        return Plm.at[i0[0], i0[1], :].set(-jnp.sqrt(1.0 - 1. / (2 * m)) * sx * Plm[i1[0], i1[1], :])
-
-    #
-    @partial(jit, donate_argnums=(1,))
-    def get_misellm1(m, Plm, xx):
-        indx = lambda ell, m: (m, ell - m)
-        i0, i1 = indx(m, m), indx(m + 1, m)
-        return Plm.at[i1[0], i1[1], :].set(jnp.sqrt(2 * m + 1.) * xx * Plm[i0[0], i0[1], :])
-
-    #
-    @jit
-    def ext_slow_recurrence(xx, Plm):
-        # Note we use Plm.shape[0] instead of Nl to allow padding
-        return vmap(partial_fun_Ylm, (0, 0, None))(jnp.arange(0, Plm.shape[0], dtype='int32'), Plm, xx)
-
-    #
-    @partial(jit, donate_argnums=(1,))
-    def partial_fun_Ylm(m, Ylm_row, xx):
-        # Ylm_row.shape = (Nl, Nx)
-        body_fun = lambda ell, Ylm_at_m: full_fun_Ylm(ell, m, Ylm_at_m, xx)
-        return fori_loop(0, len(Ylm_row) - 2, body_fun, Ylm_row)
-
-    #
-    @partial(jit, donate_argnums=(2,))
-    def full_fun_Ylm(i, m, Ylm_at_m, xx):
-        # Our indexing scheme is (m, ell-m), so since the loops start at the third column
-        # (i.e. ell=m+2) we can get ell from the loop index as
-        ell = m + i + 2
-        # The recursion relies on the previous two elements on this row
-        i0, i1, i2 = i + 2, i + 1, i
-        fact1, fact2 = jnp.sqrt((ell - m) * 1. / (ell + m)), \
-            jnp.sqrt((ell - m - 1.) / (ell + m - 1.))
-        Ylm_at_m = Ylm_at_m.at[i0, :].set(((2 * ell - 1) * xx * Ylm_at_m[i1, :]
-                                           - (ell + m - 1) * Ylm_at_m[i2, :] * fact2)
-                                          * fact1 / (ell - m))
-        return Ylm_at_m
-
-    #
-    # This should match the convention used in the SHT class below.
-    # We shift all the entries so that rows start at ell=m. This helps recursion.
-    indx = lambda ell, m: (m, ell - m)
-    # Set up a regular grid of x values.
-    xx = jnp.arange(Nx) / float(Nx - 1) * xmax
-    sx = jnp.sqrt(1 - xx ** 2)
-    # Distribute the grid across devices if possible
-    Plm = jnp.zeros((Nl, Nl, Nx))
-    # First we do the l=m=0 and l=1, m=0 cases
-    Plm = Plm.at[indx(0, 0)[0], indx(0, 0)[1], :].set(jnp.ones_like(xx))
-    Plm = Plm.at[indx(1, 0)[0], indx(1, 0)[1], :].set(xx.copy())
-    # Now we fill in m>0.
-    # To keep the recurrences stable, we treat "high m" and "low m"
-    # separately.  Start with the highest value of m allowed:
-    Plm = fori_loop(1, Nl, lambda m, Plms: get_mhigh(m, Plms, sx), Plm)
-    # Now do m=ell-1
-    Plm = fori_loop(1, Nl - 1, lambda m, Plms: get_misellm1(m, Plms, xx), Plm)
-    # Now we distribute/shard it across GPUS. Note that we should only do this
-    # once we've computed the diagonals, which happens in a direction orthogonal
-    # to our row-based sharding!
-    Plm = move_to_device(Plm, pad_axes=[0, 1])
-    # Finally fill in ell>m+1:
-    Plm = ext_slow_recurrence(xx, Plm)
-    return (Plm)
-
-
-def compute_der_table(Nl, Nx, xmax, Yv):
-    """Use recurrence relations to compute a table of derivatives of
-    Ylm[cos(theta),0] for ell>=0, m>=0, x=>0.
-    Assumes the Ylm table has already been built (passed as Yv).
-    :param  Nl: Number of ells in the derivative grid.
-    :param  xx: Values of cos(theta) at which to evaluate derivs.
-    :param  Yv: Already computed Ylm values.
-    :return Yd: The table of first derivatives.
-    """
-
-    #
-    def ext_der_slow_recurrence(xx, Yv, Yd):
-        omx2 = 1.0 - xx ** 2
-        # Note we use Yv.shape[0] instead of Nl to allow padding
-        rows = jnp.arange(0, Yv.shape[0], dtype='int32')
-        cols = jnp.arange(0, Yv.shape[1], dtype='int32')
-        return vmap(vmap(full_fun_dYlm, (0, None, 0, 0, None, None)),
-                    (None, 0, None, 0, None, None), 1)(rows, cols, Yv, Yd, xx, omx2)
-
-    @partial(jit, donate_argnums=(3,))
-    def full_fun_dYlm(m, i, Yv_at_m, Yd_at_ell_m, xx, omx2):
-        # Our indexing scheme is (m, ell-m), so we can get ell from the loop index as
-        ell = m + i
-        i0, i1 = i, i - 1
-        # indx = lambda ell, m: (m, ell - m)
-        # i0, i1 = indx(ell, m), indx(ell - 1, m)
-        fact = jnp.sqrt(1.0 * (ell - m) / (ell + m))
-        Yd_at_ell_m = Yd_at_ell_m.at[:].set(((ell + m) * fact * Yv_at_m[i1, :] - ell * xx * Yv_at_m[i0, :]) / omx2)
-        return Yd_at_ell_m
-
-    @partial(jit, donate_argnums=(3,))
-    def fill_dYmm(m, i, Yv_at_m, Yd_at_m, xx, omx2):
-        # Our indexing scheme is (m, ell-m), so we can get ell from the loop index as
-        ell = m + i
-        return Yd_at_m.at[i, :].set((- ell * xx * Yv_at_m[i, :]) / omx2)
-
-    def fill_dYmm_ext(Yv, Yd, xx):
-        omx2 = 1.0 - xx ** 2
-        # Note we use Yv.shape[0] instead of Nl to allow padding
-        rows = jnp.arange(0, Yv.shape[0], dtype='int32')
-        return vmap(fill_dYmm, (0, None, 0, 0, None, None))(rows, 0, Yv, Yd, xx, omx2)
-
-    #
-    xx = jnp.arange(Nx) / float(Nx - 1) * xmax
-    # This should match the convention used in the SHT class below.
-    indx = lambda ell, m: (m, ell - m)
-    # Distribute the grid across devices if possible
-    Yd = utils.init_array(Nl, Nx, N_devices)
-    # then build the m>0 tables.
-    Yd = ext_der_slow_recurrence(xx, Yv, Yd)
-    # Do ell=1, m=0 and ell=0, m=0, which the recursion can't give us.
-    Yd = Yd.at[indx(1, 0)[0], indx(1, 0)[1], :].set(jnp.ones_like(xx))
-    Yd = Yd.at[indx(0, 0)[0], indx(0, 0)[1], :].set(jnp.zeros_like(xx))
-    # The zeroth column (i.e. ell=m) is pathological in our implementation
-    # so do it again
-    Yd = fill_dYmm_ext(Yv, Yd, xx)
-    return (Yd)
-
-
-@partial(jit, donate_argnums=(2,))
-def norm(m, i, Ylm_at_m_ell):
-    # Get ell in our indexing scheme where indx = lambda ell, m: (m, ell - m)
-    ell = m + i
-    return Ylm_at_m_ell.at[:].multiply(jnp.sqrt((2 * ell + 1) / 4. / np.pi))
-
-
-def norm_ext(Yv, Nl):
-    '''
-    Normalize the Ylm's by the (2ell+1)/4pi factor relating Plm to Ylm
-    :param Yv: jnp.ndarray of shape (Nl, Nl, Nx) containing the Plm's
-    :return: jnp.ndarray of shape (Nl, Nl, Nx) containing the (2ell+1)/4pi Ylm
-    '''
-    # Note we use Yv.shape[0] instead of Nl to allow padding
-    rows = jnp.arange(0, Yv.shape[0], dtype='int32')
-    cols = jnp.arange(0, Yv.shape[1], dtype='int32')
-    # This is effectively a loop over ms and ells, multiplying each entry by the norm
-    return vmap(vmap(norm, (0, None, 0)),
-                (None, 0, 0))(rows, cols, Yv)
 
 
 class DirectSHT:
@@ -201,21 +45,20 @@ class DirectSHT:
         :param  Nell: Number of ells, and hence ms.
         :param  Nx:   Number of x grid points.
         :param xmax:  Maximum value of |cos(theta)| to compute.
-        :param null_unphysical: if True, set all Ylm's with ell<m to zero. Otherwise,
-            these entries will return junk when queried (the normal algorithm does not care
-            about this, but setting null_unphysical=False is marginally faster).
+        :param null_unphysical: bool. Only has an effect if jax_present=True. if True,
+            set all Ylm's with ell<m to zero. Otherwise, these entries will return junk
+            when queried (the normal algorithm does not care about this, but setting
+            null_unphysical=False is marginally faster).
         """
         self.Nell, self.Nx, self.xmax = Nell, Nx, xmax
-        xx = jnp.arange(Nx) / float(Nx - 1) * xmax
-        Yv = compute_Plm_table(Nell, Nx, xmax)
-        Yd = compute_der_table(Nell, Nx, xmax, Yv)
+        xx = jnp.arange(Nx) if jax_present else np.arange(Nx)
+        xx *= xmax / float(Nx - 1)
+        Yv = legendre.compute_Plm_table(Nell, Nx, xmax)
+        Yd = legendre.compute_der_table(Nell, Nx, xmax, Yv)
         # Multiply by the  (2ell+1)/4pi normalization factor relating Plm to Ylm
-        Yv, Yd = [norm_ext(Y, self.Nell) for Y in [Yv, Yd]]
-        if null_unphysical:
-            # Zero-out spurious entries (artefacts of our implementation)
-            mask = jnp.triu(jnp.ones((Yv.shape[0], Yv.shape[1])))
-            mask = jnp.array([jnp.roll(mask[i, :], -i) for i in range(len(mask))])
-            Yv, Yd = [jnp.nan_to_num(Y) * mask[:, :, None] for Y in [Yv, Yd]]
+        Yv, Yd = [legendre.norm_ext(Y, self.Nell) for Y in [Yv, Yd]]
+        # Null unphysical entries (id needed)
+        Yv, Yd = legendre.null_unphys(Yv, Yd) if null_unphysical else (Yv, Yd)
         self.x, self.Yv, self.Yd = xx, Yv, Yd
         #
 
@@ -293,22 +136,19 @@ class DirectSHT:
             #
             # Find which bins (bounded by the elements of x_samples) are populated
             occupied_bins = np.unique(spline_idx)
-            bin_num = len(occupied_bins)
-            # Then, we find the maximum number of points in a bin
-            bin_len = mode(spline_idx, keepdims=False).count
             # Find the data indices where transitions btw splines/bins happen
             transitions = utils.find_transitions(spline_idx)
             # Reshape the inputs into a 2D array for fast binning during
-            # computation of the v's. Our binning scheme involves zero-padding bins with fewer
-            # than bin_len points, but cos(0)=1!=0, so we need a mask to discard spurious zeros!
+            # computation of the v's. Our binning scheme involves zero-padding bins
+            # with fewer than the maximum number of points in a bin, but cos(0)=1!=0,
+            # so we need a mask to discard spurious zeros!
             mask = utils.reshape_phi_array(np.ones_like(phi_data_sorted), transitions)
             # Mask and put in GPU memory, distributing across devices if possible
             reshaped_phi_data = move_to_device(mask * utils.reshape_phi_array(phi_data_sorted, transitions))
             # Repeat the process for the other required inputs
             reshaped_inputs = utils.reshape_aux_array([w_i_sorted * input_ for input_ in
-                                                       [(2 * t + 1) * (1 - t) ** 2, t * (1 - t) ** 2,
-                                                        t ** 2 * (3 - 2 * t)
-                                                           , t ** 2 * (t - 1)]], transitions)
+                                                       [(2*t+1)*(1-t)**2, t*(1-t)**2, t**2*(3-2*t), t**2*(t-1)]],
+                                                      transitions)
             reshaped_inputs = move_to_device(mask * reshaped_inputs, axis=1)
             #
             t15 = time.time()
@@ -322,7 +162,7 @@ class DirectSHT:
             #
             if jax_present:
                 # Remove zero-padding introduced when sharding to calculate v's
-                vs_real, vs_imag = [vs[:, :, np.arange(bin_num, dtype=int)] for vs in [vs_real, vs_imag]]
+                vs_real, vs_imag = [vs[:, :, np.arange(len(occupied_bins), dtype=int)] for vs in [vs_real, vs_imag]]
                 # Get a grid of all alm's by batching over (ell,m) -- best run on a GPU!
                 get_all_alms_w_jax = vmap(vmap(interp.get_alm_jax, (0, 0, 0, 0, None)), (0, 0, 0, 0, 0))
                 # Note that we use a hack to pass the m value through vmap as the first element of every row of Yv
@@ -343,7 +183,7 @@ class DirectSHT:
                 # JIT compile the get_alm function
                 get_alm_jitted = jit(nopython=True)(interp.get_alm_np)
                 #
-                alm_grid = np.zeros(len(self.Yv[:, occupied_bins][:, 0]), dtype='complex128')
+                alm_grid = np.zeros((self.Nell * (self.Nell + 1)) // 2, dtype='complex128')
                 vs_tot = vs_real - 1j * vs_imag
                 # TODO: parallelize this
                 # Note that we scale derivatives by dx
@@ -357,58 +197,4 @@ class DirectSHT:
             if verbose:
                 print("Computing alm's took ", t3 - t2, " seconds.", flush=True)
         return (alm_grid_tot / reg_factor)
-        #
-
-    def indx(self, ell, m):
-        """
-        The index in the grid storing Ylm for ell>=0, 0<=m<=ell.
-        Matches the Healpix convention.
-        Note: this should match the indexing in ext_slow_recurrence
-        and ext_der_slow_recurrence.
-        :param  ell: ell value to return.
-        :param  m:   m value to return.
-        :return ii:  Index value in the value and derivatives grids.
-        """
-        ii = (m * (2 * self.Nell - 1 - m)) // 2 + ell
-        return (ii)
-
-    def slow_recurrence(self, Nl, xx, Ylm):
-        """Pull out the slow, multi-loop piece of the recurrence.
-        THIS IS CURRENTLY NOT USED."""
-        for m in range(0, Nl - 1):
-            for ell in range(m + 2, Nl):
-                i0, i1, i2 = self.indx(ell, m), \
-                    self.indx(ell - 1, m), \
-                    self.indx(ell - 2, m)
-                fact1, fact2 = np.sqrt((ell - m) * 1. / (ell + m)), \
-                    np.sqrt((ell - m - 1.) / (ell + m - 1.))
-                Ylm[i0, :] = (2 * ell - 1) * xx * Ylm[i1, :] - \
-                             (ell + m - 1) * Ylm[i2, :] * fact2
-                Ylm[i0, :] *= fact1 / (ell - m)
-        return (Ylm)
-        #
-
-    def interp_test(self, ell, m, xx):
-        """Interpolates Ylm(acos(x),0) at positions xx. Using a
-        cubic Hermite spline.  Assumes xx is sorted.
-        Used during development for code and convergence tests.
-        :param  ell: ell value to return.
-        :param  m:   m value to return.
-        :param  xx:  Array of cos(theta) values, assumed sorted.
-        :return yx:  Interpolated Y[ell,m,x=Cos[theta],0].
-        """
-        jj = self.indx(ell, m)
-        i1 = np.digitize(xx, self.x)
-        i0 = i1 - 1
-        dx = 0.5 * (self.x[2] - self.x[0])
-        tt = (xx - self.x[i0]) / dx
-        t1 = (tt - 1.0) ** 2
-        t2 = tt ** 2
-        s0 = (1 + 2 * tt) * t1
-        s1 = tt * t1
-        s2 = t2 * (3 - 2 * tt)
-        s3 = t2 * (tt - 1.0)
-        yx = self.Yv[jj, i0] * s0 + self.Yd[jj, i0] * s1 * dx + \
-             self.Yv[jj, i1] * s2 + self.Yd[jj, i1] * s3 * dx
-        return (yx)
         #
