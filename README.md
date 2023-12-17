@@ -41,3 +41,8 @@ alms = sht(thetas,phis,weights)
 The code returns a complex array stored in the same convention as Healpy
 uses.  You can get the index of a given ell,m mode using the "indx" method
 of the class.
+
+We give several examples of how to compute alms for different sets of points,
+do a pseudo-spectrum calculation for mock galaxies and look at how the code
+performs in Jupyter notebooks within the `notebooks` directory.  Please look
+there for further information.
