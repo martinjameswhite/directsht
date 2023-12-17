@@ -1,8 +1,6 @@
 import numpy as np
-
-jax_present = True
 import jax
-from jax import jit, lax
+from jax import jit
 from jax.sharding import PositionalSharding
 from functools import partial
 from jax.experimental import mesh_utils
@@ -147,7 +145,7 @@ def init_array(Nl, Nx, Ndevices, axes=[0, 1]):
     sharding = sharding.reshape((N_devices, 1, 1))
 
     # This is a trick to shard the array at instantiation
-    @partial(jax.jit, static_argnums=(0, 1, 2), out_shardings=sharding)
+    @partial(jit, static_argnums=(0, 1, 2), out_shardings=sharding)
     def f(Nl, Nx, axes=[0, 1]):
         return pad_to_shard(jax.numpy.zeros((Nl, Nl, Nx)), axes)
 
@@ -247,7 +245,6 @@ def to_hp_convention(alm_grid_real, alm_grid_imag):
     alm_hp = np.zeros((Nl * (Nl + 1)) // 2, dtype='complex128')
     # Fill in the output array
     flat_idx = np.triu_indices(alm_grid_real.shape[0])
-
     alm_real, alm_imag = [flatten_mat(mat, flat_idx) for mat in [alm_grid_real, alm_grid_imag]]
-    alm_hp = alm_real - 1j * alm_imag
+    alm_hp[:] = alm_real - 1j * alm_imag
     return alm_hp

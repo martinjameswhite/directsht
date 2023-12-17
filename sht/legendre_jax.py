@@ -1,6 +1,6 @@
 import numpy as np
 import interp_funcs_py as interp
-import utils
+import utils_py
 
 import time
 from scipy.stats import mode
@@ -8,7 +8,7 @@ from scipy.stats import mode
 from jax import vmap, jit, devices
 from jax.sharding import PositionalSharding
 from jax.experimental import mesh_utils
-from utils import move_to_device
+from utils_py import move_to_device
 import jax.numpy as jnp
 from functools import partial
 from jax.lax import fori_loop

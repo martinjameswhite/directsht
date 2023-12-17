@@ -11,23 +11,17 @@ import time
 try:
     jax_present = True
     from jax import vmap, jit, devices
-    from jax.sharding import PositionalSharding
-    from jax.experimental import mesh_utils
-    from utils import move_to_device
     import jax.numpy as jnp
-    from functools import partial
-    from jax.lax import fori_loop
-    import jax
     import legendre_jax as legendre
     import interp_funcs_jax as interp
     import utils_jax as utils
+    from utils_jax import move_to_device
     # Choose the number of devices we'll be parallelizing across
     N_devices = len(devices())
 except ImportError:
     jax_present = False
     move_to_device = lambda x, **kwargs: x  # Dummy definition for fallback
     print("JAX not found. Falling back to NumPy.")
-    import numpy as jnp
     from numba import njit as jit
     import legendre_py as legendre
     import interp_funcs_py as interp
@@ -35,17 +29,14 @@ except ImportError:
     N_devices = 1
 
 
-
-
 class DirectSHT:
     """Brute-force spherical harmonic transforms."""
-
     def __init__(self, Nell, Nx, xmax=0.875, null_unphysical=True):
         """Initialize the class, build the interpolation tables.
         :param  Nell: Number of ells, and hence ms.
         :param  Nx:   Number of x grid points.
         :param xmax:  Maximum value of |cos(theta)| to compute.
-        :param null_unphysical: bool. Only has an effect if jax_present=True. if True,
+        :param null_unphysical: bool. Only has an effect if jax_present=True. If True,
             set all Ylm's with ell<m to zero. Otherwise, these entries will return junk
             when queried (the normal algorithm does not care about this, but setting
             null_unphysical=False is marginally faster).
@@ -123,8 +114,8 @@ class DirectSHT:
             t0 = time.time()
             # Sort the data in ascending order of theta
             sorted_idx = np.argsort(x)
-            x_data_sorted = x[sorted_idx];
-            w_i_sorted = wt[idx][sorted_idx];
+            x_data_sorted = x[sorted_idx]
+            w_i_sorted = wt[idx][sorted_idx]
             phi_data_sorted = phi[idx][sorted_idx]
             #
             t1 = time.time()
@@ -162,21 +153,16 @@ class DirectSHT:
             #
             if jax_present:
                 # Remove zero-padding introduced when sharding to calculate v's
-                vs_real, vs_imag = [vs[:, :, np.arange(len(occupied_bins), dtype=int)] for vs in [vs_real, vs_imag]]
+                vs_real, vs_imag = [vs[:,:,np.arange(len(occupied_bins), dtype=int)] for vs in [vs_real, vs_imag]]
                 # Get a grid of all alm's by batching over (ell,m) -- best run on a GPU!
-                get_all_alms_w_jax = vmap(vmap(interp.get_alm_jax, (0, 0, 0, 0, None)), (0, 0, 0, 0, 0))
+                get_all_alms = vmap(vmap(interp.get_alm_jax, (0,0,0,0,None)), (0,0,0,0,0))
                 # Note that we use a hack to pass the m value through vmap as the first element of every row of Yv
                 # We also scale derivatives by dx
-                alm_grid_real = get_all_alms_w_jax(self.Yv[:, :, occupied_bins], self.Yv[:, :, occupied_bins + 1],
-                                                   dx * self.Yd[:, :, occupied_bins],
-                                                   dx * self.Yd[:, :, occupied_bins + 1],
-                                                   vs_real)
-                alm_grid_imag = get_all_alms_w_jax(self.Yv[:, :, occupied_bins], self.Yv[:, :, occupied_bins + 1],
-                                                   dx * self.Yd[:, :, occupied_bins],
-                                                   dx * self.Yd[:, :, occupied_bins + 1],
-                                                   vs_imag)
+                alm_real, alm_imag = [get_all_alms(self.Yv[:,:,occupied_bins], self.Yv[:,:,occupied_bins+1],
+                                                   dx*self.Yd[:,:,occupied_bins], dx*self.Yd[:,:,occupied_bins+1], vs)
+                                      for vs in [vs_real, vs_imag]]
                 # Combine real and imaginary parts of the alms, and adapt to healpy convention
-                alm_grid = utils.to_hp_convention(alm_grid_real, alm_grid_imag)
+                alm_grid = utils.to_hp_convention(alm_real, alm_imag)
                 # If we introduced padding when sharding, remove it
                 alm_grid = utils.unpad(alm_grid, len(ell_ordering))
             else:
