@@ -1,7 +1,6 @@
 import numpy as np
 import psutil
 import utils_py as utils
-#from functools import partial
 
 try:
     jax_present = True
@@ -16,7 +15,6 @@ except ImportError:
 
 default_dtype = None # Replace if you want to use a different dtype from the env default
 
-#@partial(jit, donate_argnums=(1,2))
 def get_vs(mmax, phi_data_reshaped, reshaped_inputs, loop_in_JAX=True, N_chunks=None,
            pad=False, verbose=False):
     """
@@ -132,7 +130,7 @@ def get_vs_at_m(m, phi_data_reshaped, reshaped_inputs):
                   [jnp.cos(m * phi_data_reshaped), jnp.sin(m * phi_data_reshaped)]]
     return vs_r, vs_i
 
-@partial(jit, donate_argnums=(0,))
+@jit
 def collapse(arr):
     '''
     Sum over the second axis of a 2D array -- i.e., the key binning operation!
@@ -143,23 +141,7 @@ def collapse(arr):
     return jnp.sum(arr, axis=-1)
 
 @partial(jit, donate_argnums=(4,))
-def get_alm_jax(Ylm_i, Ylm_ip1, dYlm_i, dYlm_ip1, vs):
-    """
-    The key function: get alm by summing over all interpolated, weighted
-    Y_lm's using JAX. Interpolation uses cubic Hermite splines
-    :param Ylm_i: 1d numpy array of Ylm at sample indices i
-            IMPORTANT NOTE: the zeroth element of this array is the value of m
-            this is a hack to be able to pass the value of m through the vmap
-    :param dYlm_i: 1d numpy array of first derivatives of Ylm at sample indices i
-    :param Ylm_ip1: 1d numpy array of Ylm at sample indicesi+1
-            IMPORTANT NOTE: the zeroth element of this array is the value of m
-            this is a hack to be able to pass the value of m through the vmap
-    :param dYlm_ip1: 1d numpy array of first derivatives of Ylm at sample indices i+1
-    :param vs: jnp array of size (mmax+1,4,Nx) with the v_{i,j}(m)
-    :return: a 1D numpy array with the alm value
-    """
 
-    return(jnp.sum(Ylm_i*vs[0] + dYlm_i*vs[1] + Ylm_ip1*vs[2] + dYlm_ip1*vs[3]))
 
 def get_alm_np(Ylm_i, Ylm_ip1, dYlm_i, dYlm_ip1, vs, m):
     """
