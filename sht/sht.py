@@ -96,14 +96,14 @@ class DirectSHT:
         # Split into positive and negative values of x.
         # We'll treat them separately and rejoin them ar the very end
         pos_idx, neg_idx =  np.where(x_full >= 0)[0], np.where(x_full < 0)[0]
-        if pos_idx.any() and neg_idx.any():
+        if (len(pos_idx)>0) and (len(neg_idx)>0):
             # The case where there's both +ve and -ve values of x
             which_case = zip([x_full[pos_idx], np.abs(x_full[neg_idx])], \
                              [1., parity_factor], [pos_idx, neg_idx])
-        elif pos_idx.any():
+        elif (len(pos_idx)>0):
             # The case where there's only +ve values of x
             which_case = zip([x_full[pos_idx]], [1.], [pos_idx])
-        elif neg_idx.any():
+        elif (len(neg_idx)>0):
             # The case where there's only -ve values of x
             which_case = zip([np.abs(x_full[neg_idx])], [parity_factor], \
                              [neg_idx])
