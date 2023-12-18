@@ -25,7 +25,7 @@ from sht.sht import DirectSHT
 
 # The class takes a number of multipoles to compute (lmax=Nl-1)
 # and the number of spline points for interpolation.
-# Typically Nx ~ 2 Nl is a conservative choice.
+# Typically Nx ~ Nl and Nx ~ 2 Nl is a conservative choice.
 Nl = 500
 Nx = 1024 
 # Generate an instance of the class.

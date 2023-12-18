@@ -36,7 +36,7 @@ if __name__=="__main__":
                 theta     = np.arccos(x)
                 Ylb[ii,i] = np.real( sph_harm(m,ell,0,theta) )
     # Pick some values of x=cos(theta) to compare.
-    ii = [0,Nx//3,2*Nx//3,Nx-1]
+    ii = np.array([0,Nx//3,2*Nx//3,Nx-1])
     print("\nCompare our class to SciPy for x=cos(theta)=",sht.x[ii])
     # First cross-check some Ylm values for sanity.
     print("\nCheck Ylm values.")
