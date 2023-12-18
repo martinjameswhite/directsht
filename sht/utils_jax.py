@@ -4,6 +4,7 @@ from jax import jit
 from jax.sharding import PositionalSharding
 from functools import partial
 from jax.experimental import mesh_utils
+import shared_utils
 
 # Choose the number of devices we'll be parallelizing across
 N_devices = len(jax.devices())
@@ -13,16 +14,9 @@ default_dtype = None  # Replace if you want to use a different dtype from the en
 
 def find_transitions(arr):
     '''
-    Find the indices where the data transitions from one bin/spline to the next
-    :param arr: 1D numpy array indicating what bin/spline each element belongs to (must be sorted)
-    :return: 1D numpy array of indices where the value in arr changes,
-                including a 0 at the beginning and None at the end for indexing convenience
+    Wrapper function to call find_transitions from shared_utils
     '''
-    # Find the differences between consecutive elements
-    differences = np.diff(arr)
-    # Find the indices where differences are non-zero
-    transition_indices = np.nonzero(differences)[0] + 1
-    return transition_indices
+    return shared_utils.transition_indices(arr)
 
 
 def reshape_phi_array(data, bin_edges):

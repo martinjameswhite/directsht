@@ -44,38 +44,36 @@ class DirectSHT:
         # Set up a regular grid of x values.
         xx = jnp.arange(Nx, dtype=dflt_type) if jax_present else np.arange(Nx, dtype=dflt_type)
         xx *= xmax / float(Nx - 1)
+        # Compute Plm and its derivate w.r.t. x
         Yv = legendre.compute_Plm_table(Nell, xx)
         Yd = legendre.compute_der_table(Nell, xx, Yv)
-        # Multiply by the  (2ell+1)/4pi normalization factor relating Plm to Ylm
+        # Multiply by the (2ell+1)/4pi normalization factor relating Plm to Ylm
         Yv, Yd = [legendre.norm_ext(Y, self.Nell) for Y in [Yv, Yd]]
         # Null unphysical entries (id needed)
         Yv, Yd = legendre.null_unphys(Yv, Yd) if null_unphysical else (Yv, Yd)
         self.x, self.Yv, self.Yd = xx, Yv, Yd
         #
-
     def indx(self,ell,m):
         """
-        The index in the grid storing Ylm for ell>=0, 0<=m<=ell.
-        Matches the Healpix convention.
-        Note: this should match the indexing in ext_slow_recurrence
-        and ext_der_slow_recurrence.
+        The index in the output array produced when calling the object
+        that stores Ylm for ell>=0, 0<=m<=ell. Matches the Healpix convention.
         :param  ell: ell value to return.
         :param  m:   m value to return.
-        :return ii:  Index value in the value and derivatives grids.
+        :return ii:  Index value in the output alm array
         """
         ii= (m*(2*self.Nell-1-m))//2 + ell
-        return(ii)
+        return( ii )
     def __call__(self, theta, phi, wt, reg_factor=1., verbose=True):
         """
         Returns alm for a collection of real-valued points at (theta,phi),
         in radians, with weights wt.
         :param theta: 1D numpy array of theta values for each point.
-         Must be between [0,pi], and also satisfy [ACos[xmax],ACos[-xmax]
+            Must be between [0,pi], and also satisfy [ACos[xmax],ACos[-xmax]
         :param phi: 1D numpy array of phi values for each point.
-         Must be between [0,2pi].
+            Must be between [0,2pi].
         :param wt: 1D numpy array of weights for each point.
         :param reg_factor: Scaling to apply to weights to avoid numerical
-         over/underflow. It gets removed at the end.
+            over/underflow. It gets removed at the end. Typically not used.
         :param verbose: if True, print out timing information.
         :return: alm in the Healpix indexing convention,
                  i.e., complex coefficients alm[m*(2*lmax+1-m)/2+l]
@@ -85,7 +83,7 @@ class DirectSHT:
                len(phi) == len(wt), "theta,phi,wt must be the same length."
         assert np.all((theta >= 0) & (theta > np.arccos(self.xmax)) & (theta < np.arccos(-self.xmax))), \
             "theta must be in [ACos[xmax],ACos[-xmax])."
-
+        #
         x_samples = self.x
         # TODO: this way of calculating dx assumes the points are evenly spaced in x
         dx = x_samples[1] - x_samples[0]
@@ -94,10 +92,10 @@ class DirectSHT:
         wt *= reg_factor
         # Get the indexing of ell and m in the Healpix convention for
         # later use
-        ell_ordering, m_ordering = utils.getlm(self.Nell - 1, (self.Nell * (self.Nell + 1)) // 2)
+        ell_ordering, m_ordering = utils.getlm(self.Nell-1, (self.Nell*(self.Nell+1))//2)
         # Eventually, we will need to multiply the alm's by (-1)^{ell-m}
         # for x=cos\theta<0
-        parity_factor = (-1) ** (ell_ordering - m_ordering)
+        parity_factor = (-1)**(ell_ordering - m_ordering)
         # Initialize storage array in dtype compatible with Healpy
         alm_grid_tot = np.zeros(len(ell_ordering), dtype='complex128')
         # We've precomputed P_{\ell m}(x=cos(theta)), so let's work
@@ -108,14 +106,14 @@ class DirectSHT:
         pos_idx, neg_idx =  np.where(x_full >= 0)[0], np.where(x_full < 0)[0]
         if (len(pos_idx)>0) and (len(neg_idx)>0):
             # The case where there's both +ve and -ve values of x
-            which_case = zip([x_full[pos_idx], np.abs(x_full[neg_idx])], \
+            which_case = zip([x_full[pos_idx], np.abs(x_full[neg_idx])],
                              [1., parity_factor], [pos_idx, neg_idx])
         elif (len(pos_idx)>0):
             # The case where there's only +ve values of x
             which_case = zip([x_full[pos_idx]], [1.], [pos_idx])
         elif (len(neg_idx)>0):
             # The case where there's only -ve values of x
-            which_case = zip([np.abs(x_full[neg_idx])], [parity_factor], \
+            which_case = zip([np.abs(x_full[neg_idx])], [parity_factor],
                              [neg_idx])
         else:
             raise ValueError("The theta array seems to be empty!")
@@ -123,21 +121,23 @@ class DirectSHT:
         # Treat +ve and -ve x separately
         for x, par_fact, idx in which_case:
             t0 = time.time()
-            # Find which spline region each point falls into
+            # Find which spline interval each point falls into
             spline_idx = np.digitize(x, x_samples) - 1
-            # Reorder the data in bins (we don't care about specific order inside bin)
+            # Reorder the data in bins. We don't care about specific order inside bin, so
+            # this sorting is faster than if we had to actually sort all the data
             sorted_idx = np.argsort(spline_idx)
             spline_idx = spline_idx[sorted_idx]
             x_data_sorted = x[sorted_idx]
             w_i_sorted = wt[idx][sorted_idx]
             phi_data_sorted = phi[idx][sorted_idx]
-            # Calculate the t's we'll need when interpolating
+            # Calculate the t's. We'll need when interpolating
             t = (x_data_sorted - x_samples[spline_idx]) / dx
             #
             t1 = time.time()
             if verbose: print("Sorting & digitizing took ", t1 - t0, " seconds.", flush=True)
             #
-            # Find which bins (bounded by the elements of x_samples) are populated
+            # Find which bins (bounded by the elements of x_samples) are populated.
+            # The point is to avoid unnecessary storage and computation
             occupied_bins = np.unique(spline_idx)
             # Find the data indices where transitions btw splines/bins happen
             transitions = utils.find_transitions(spline_idx)
