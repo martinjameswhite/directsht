@@ -54,7 +54,6 @@ class DirectSHT:
         Yv, Yd = legendre.null_unphys(Yv, Yd) if null_unphysical else (Yv, Yd)
         self.x, self.Yv, self.Yd = xx, Yv, Yd
         #
-
     def indx(self,ell,m):
         """
         The index in the grid storing Ylm for ell>=0, 0<=m<=ell.
@@ -67,6 +66,23 @@ class DirectSHT:
         """
         ii= (m*(2*self.Nell-1-m))//2 + ell
         return(ii)
+        #
+    def alm2cl(self,alm):
+        """
+        Returns the pseudo-spectrum given alms.
+        :param alm: Values of the SHT coefficients,
+                    assumed compatible with this class instance.
+        :return cl: 1D numpy array containing 1/(2l+1) Sum_m |alm|^2.
+        """
+        cl = np.zeros(self.Nell)
+        for ell in range(self.Nell):
+            cl[ell] = alm[self.indx(ell,0)].real**2
+            for m in range(1,ell+1):
+                ii       = self.indx(ell,m)
+                cl[ell] += 2*(alm[ii].real**2+alm[ii].imag**2)
+            cl[ell] /= 2*ell + 1.
+        return(cl)
+        #
     def __call__(self, theta, phi, wt, reg_factor=1., verbose=True):
         """
         Returns alm for a collection of real-valued points at (theta,phi),
