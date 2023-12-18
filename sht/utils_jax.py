@@ -13,7 +13,7 @@ def find_transitions(arr):
     '''
     Wrapper function to call find_transitions from shared_utils
     '''
-    return shared_utils.transition_indices(arr)
+    return shared_utils.find_transitions(arr)
 
 def reshape_phi(data, bin_edges):
     '''
@@ -86,7 +86,7 @@ def init_array(Nl, Nx, N_devices, axes=[0, 1]):
     @partial(jax.jit, static_argnums=(0, 1, 2), out_shardings=sharding)
     def f(Nl, Nx, axes=[0, 1]):
         return pad_to_shard(jax.numpy.zeros((Nl, Nl, Nx)), axes)
-    return f(Nl, Nx, axes)
+    return f(Nl, Nx)
 
 def pad_to_shard(arr, axes=0):
     '''
