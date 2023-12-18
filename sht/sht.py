@@ -141,24 +141,24 @@ class DirectSHT:
             occupied_bins = np.unique(spline_idx)
             # Find the data indices where transitions btw splines/bins happen
             transitions = utils.find_transitions(spline_idx)
-            # Reshape the inputs into a 2D array for fast binning during
-            # computation of the v's. Our binning scheme involves zero-padding bins
-            # with fewer than the maximum number of points in a bin, but cos(0)=1!=0,
-            # so we need a mask to discard spurious zeros!
-            mask = utils.reshape_phi_array(np.ones_like(phi_data_sorted), transitions)
-            # Mask and put in GPU memory, distributing across devices if possible
-            reshaped_phi_data = move_to_device(mask * utils.reshape_phi_array(phi_data_sorted, transitions))
+            # Reshape the inputs into a 2D array for fast accumulation within bins
+            # during computation of the v's. Our binning scheme involves zero-padding
+            # bins with fewer than the maximum number of points in a bin, but
+            # cos(0)=1!=0, so we need a mask to discard spurious zeros!
+            mask = utils.reshape_phi(np.ones_like(phi_data_sorted), transitions)
+            # Mask and put in GPU memory distributing across devices (if possible)
+            reshaped_phi_data = move_to_device(mask * utils.reshape_phi(phi_data_sorted, transitions))
             # Repeat the process for the other required inputs
-            reshaped_inputs = utils.reshape_aux_array([w_i_sorted * input_ for input_ in
-                                                       [(2*t+1)*(1-t)**2, t*(1-t)**2, t**2*(3-2*t), t**2*(t-1)]],
-                                                      transitions)
+            reshaped_inputs = utils.reshape_aux([w_i_sorted * input_ for input_ in
+                                                 [(2*t+1)*(1-t)**2, t*(1-t)**2, t**2*(3-2*t), t**2*(t-1)]],
+                                                transitions)
             reshaped_inputs = move_to_device(mask * reshaped_inputs, axis=1)
             #
             t15 = time.time()
             if verbose: print("Reshaping took ", t15 - t1, " seconds.", flush=True)
             #
             # Precompute the v's
-            vs_real, vs_imag = interp.get_vs(self.Nell - 1, reshaped_phi_data, reshaped_inputs)
+            vs_real, vs_imag = interp.get_vs(self.Nell-1, reshaped_phi_data, reshaped_inputs)
             #
             t2 = time.time()
             if verbose: print("Precomputing vs took ", t2 - t1, " seconds.", flush=True)
@@ -168,8 +168,7 @@ class DirectSHT:
                 vs_real, vs_imag = [vs[:,:,np.arange(len(occupied_bins), dtype=int)] for vs in [vs_real, vs_imag]]
                 # Get a grid of all alm's by batching over (ell,m) -- best run on a GPU!
                 get_all_alms = vmap(vmap(interp.get_alm_jax, (0,0,0,0,None)), (0,0,0,0,0))
-                # Note that we use a hack to pass the m value through vmap as the first element of every row of Yv
-                # We also scale derivatives by dx
+                # Note that we scale the derivatives by dx, as required by Hermite interpolation
                 alm_real, alm_imag = [get_all_alms(self.Yv[:,:,occupied_bins], self.Yv[:,:,occupied_bins+1],
                                                    dx*self.Yd[:,:,occupied_bins], dx*self.Yd[:,:,occupied_bins+1], vs)
                                       for vs in [vs_real, vs_imag]]
@@ -180,14 +179,14 @@ class DirectSHT:
             else:
                 # JIT compile the get_alm function
                 get_alm_jitted = jit(nopython=True)(interp.get_alm_np)
-                #
-                alm_grid = np.zeros((self.Nell * (self.Nell + 1)) // 2, dtype='complex128')
+                # Temporary storage for alms
+                alm_grid = np.zeros((self.Nell*(self.Nell+1))//2, dtype='complex128')
                 vs_tot = vs_real - 1j * vs_imag
                 # TODO: parallelize this
-                # Note that we scale derivatives by dx
+                # Note that we scale the derivatives by dx, as required by Hermite interpolation
                 for i, (Ylm_i, Ylm_ip1, dYlm_i, dYlm_ip1, m) in \
-                        enumerate(zip(self.Yv[:, occupied_bins], self.Yv[:, occupied_bins + 1],
-                                      dx * self.Yd[:, occupied_bins], dx * self.Yd[:, occupied_bins + 1], m_ordering)):
+                        enumerate(zip(self.Yv[:, occupied_bins], self.Yv[:, occupied_bins+1],
+                                      dx*self.Yd[:, occupied_bins], dx*self.Yd[:, occupied_bins+1], m_ordering)):
                     alm_grid[i] = get_alm_jitted(Ylm_i, Ylm_ip1, dYlm_i, dYlm_ip1, vs_tot, m)
             # For x<0, we need to multiply by (-1)^{ell-m}
             alm_grid_tot += par_fact * alm_grid

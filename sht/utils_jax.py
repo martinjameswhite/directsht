@@ -1,6 +1,5 @@
 import numpy as np
 import jax
-from jax import jit
 from jax.sharding import PositionalSharding
 from functools import partial
 from jax.experimental import mesh_utils
@@ -8,8 +7,6 @@ import shared_utils
 
 # Choose the number of devices we'll be parallelizing across
 N_devices = len(jax.devices())
-
-default_dtype = None  # Replace if you want to use a different dtype from the env default
 
 
 def find_transitions(arr):
@@ -19,49 +16,17 @@ def find_transitions(arr):
     return shared_utils.transition_indices(arr)
 
 
-def reshape_phi_array(data, bin_edges):
+def reshape_phi(data, bin_edges):
     '''
-    Reshape a 1D array into a 2D array to facilitate binning in computation of v's
-    :param data: 1D numpy array of data to be binned
-    :param bin_edges: 1D numpy array of indices where the values in data go
-            from one bin to the next. Must include 0 and a None at the end.
-    :param bin_num: int. Number of bins where there is data
-    :param bin_len: int. Maximum number of points in a bin
-    :return: 2D numpy array of shape (bin_num, bin_len), zero padded in bins
-            with fewer than bin_len points
+    Wrapper function to call reshape_phi_array from shared_utils
     '''
-    # Split the data into bins bounded by interpolation nodes
-    split_arr = np.split(data, bin_edges, axis=0)
-    # Find the maximum length of the subarrays
-    max_length = max(subarray.shape[0] for subarray in split_arr)
-    # Zero-pad the subarrays to the maximum length
-    padded_arrs = [np.pad(subarray, (0, max_length - subarray.shape[0]),
-                                 mode='constant') for subarray in split_arr]
-    # Stack the padded subarrays vertically
-    return np.stack(padded_arrs, axis=0)
+    return shared_utils.reshape_phi(data, bin_edges)
 
-
-def reshape_aux_array(inputs, bin_edges):
+def reshape_aux(inputs, bin_edges):
     '''
-    Reshape the four auxiliary 1D arrays into a 2D array shaped in such a way
-    to facilitate binning during computation of the v's.
-    :param inputs: list of four 1D numpy array of data to be binned
-    :param bin_edges:  1D numpy array of indices where the values in data go
-            from one bin to the next. Must include 0 and a None at the end.
-    :return: 2D numpy array of shape (4, bin_num, bin_len), zero padded in bins
-            with fewer than bin_len points
+    Wrapper function to call reshape_phi_array from shared_utils
     '''
-    # Stack list of inputs into a (4, Npnt) array
-    inputs_arr = np.vstack(inputs)
-    # Split the data into bins bounded by interpolation nodes
-    split_arr = np.split(inputs_arr, bin_edges, axis=1)
-    # Find the maximum length of the subarrays
-    max_length = max(subarray.shape[1] for subarray in split_arr)
-    # Zero-pad the subarrays along axis=1 to the maximum length
-    padded_arrs = [np.pad(subarray, ((0, 0), (0, max_length - subarray.shape[1])),
-                                 mode='constant') for subarray in split_arr]
-    # Stack the padded subarrays vertically
-    return np.stack(padded_arrs, axis=1)
+    return shared_utils.reshape_aux(inputs, bin_edges)
 
 
 def getlm(lmax, szalm, i=None):
@@ -92,15 +57,15 @@ def getlm(lmax, szalm, i=None):
 
 def move_to_device(arr, axis=0, pad_axes=None, verbose=False):
     '''
-    Helper function to shard (i.e. distribute) an array across devices.
+    Helper function to shard (i.e. distribute) an array across devices (typically GPUs).
     :param arr: np.ndarray
-        The array to be sharded
+        The array to be moved to the devices and sharded
     :param axis: int
         The axis along which to shard the array
     :param pad_axes: int or list of int. (optional)
         The axes along which to pad the array. By default, padding is only along sharded axis
     :param verbose: bool
-        Whether to visualize the sharding scheme. Only works for !d2D arrays.
+        Whether to visualize the sharding scheme. Only works for 2D arrays.
     :return:
     '''
     if pad_axes is None:
@@ -109,7 +74,7 @@ def move_to_device(arr, axis=0, pad_axes=None, verbose=False):
         assert len(arr.shape) == 3, "Only sharding along axis=1 is supported for 3D arrays"
     # Initialize sharding scheme
     sharding = PositionalSharding(mesh_utils.create_device_mesh(N_devices))
-    # If needed, zero-pad the array so that its length along the sharded dimension
+    # If needed, zero-pad the array so that its length along the sharded dimension(s)
     # is divisible by the number of devices we're distributing across
     arr = pad_to_shard(arr, pad_axes)
     # Reshape sharding scheme based on array dimensions
@@ -120,6 +85,7 @@ def move_to_device(arr, axis=0, pad_axes=None, verbose=False):
         sharding_reshaped = sharding.reshape((N_devices, 1))
     else:
         sharding_reshaped = sharding
+    # Move to the GPU with the desired sharding scheme
     arr = jax.device_put(arr, sharding_reshaped)
     if verbose:
         # Visualize the sharding
@@ -139,7 +105,7 @@ def init_array(Nl, Nx, Ndevices, axes=[0, 1]):
     sharding = sharding.reshape((N_devices, 1, 1))
 
     # This is a trick to shard the array at instantiation
-    @partial(jit, static_argnums=(0, 1, 2), out_shardings=sharding)
+    @partial(jax.jit, static_argnums=(0, 1, 2), out_shardings=sharding)
     def f(Nl, Nx, axes=[0, 1]):
         return pad_to_shard(jax.numpy.zeros((Nl, Nl, Nx)), axes)
 
@@ -198,24 +164,6 @@ def unpad(arr, unpadded_len, axis=0):
     else:
         # No need for unpadding
         return arr
-
-
-def predict_memory_usage(num_elements, dtype):
-    '''
-    Predict the memory usage of an array of a given size and dtype
-    :param num_elements: int.
-        The number of elements in the array
-    :param dtype: np.dtype
-        The dtype of the array
-    :return: float
-        The predicted memory usage in bytes
-    '''
-    # Get the size of each element in bytes
-    element_size = dtype.itemsize
-    # Calculate total memory usage in bytes
-    total_memory = element_size * num_elements
-    return total_memory
-
 
 def to_hp_convention(alm_grid_real, alm_grid_imag):
     '''

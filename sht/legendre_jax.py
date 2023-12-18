@@ -10,8 +10,13 @@ from jax.lax import fori_loop
 N_devices = len(devices())
 
 def null_unphys(Yv, Yd):
+    '''
+    Zero-out spurious entries (artefacts of our implementation)
+    :param Yv: jnp array of size (Nell, Nell) with the Ylms
+    :param Yd: jnp array of size (Nell, Nell) with the derivatives of Ylms
+    :return: tuple (Yv, Yd) where we've zeroed out the unphysical entries
+    '''
     # TODO: Make this act in place by donating buffers
-    # Zero-out spurious entries (artefacts of our implementation)
     mask = jnp.triu(jnp.ones((Yv.shape[0], Yv.shape[1])))
     mask = jnp.array([jnp.roll(mask[i, :], -i) for i in range(len(mask))])
     Yv, Yd = [jnp.nan_to_num(Y) * mask[:, :, None] for Y in [Yv, Yd]]

@@ -2,58 +2,25 @@ import numpy as np
 import shared_utils
 
 N_devices = 1
-default_dtype = None  # Replace if you want to use a different dtype from the env default
-
 
 def find_transitions(arr):
     '''
     Wrapper function to call find_transitions from shared_utils
     '''
-    return shared_utils.transition_indices(arr)
+    return shared_utils.find_transitions(arr)
 
-def reshape_phi_array(data, bin_edges):
+def reshape_phi(data, bin_edges):
     '''
-    Reshape a 1D array into a 2D array to facilitate binning in computation of v's
-    :param data: 1D numpy array of data to be binned
-    :param bin_edges: 1D numpy array of indices where the values in data go
-            from one bin to the next. Must include 0 and a None at the end.
-    :param bin_num: int. Number of bins where there is data
-    :param bin_len: int. Maximum number of points in a bin
-    :return: 2D numpy array of shape (bin_num, bin_len), zero padded in bins
-            with fewer than bin_len points
+    Wrapper function to call reshape_phi_array from shared_utils
     '''
-    # Split the data into bins bounded by interpolation nodes
-    split_arr = np.split(data, bin_edges, axis=0)
-    # Find the maximum length of the subarrays
-    max_length = max(subarray.shape[0] for subarray in split_arr)
-    # Zero-pad the subarrays to the maximum length
-    padded_arrs = [np.pad(subarray, (0, max_length - subarray.shape[0]),
-                                 mode='constant') for subarray in split_arr]
-    # Stack the padded subarrays vertically
-    return np.stack(padded_arrs, axis=0)
+    return shared_utils.reshape_phi(data, bin_edges)
 
+def reshape_aux(inputs, bin_edges):
+    '''
+    Wrapper function to call reshape_phi_array from shared_utils
+    '''
+    return shared_utils.reshape_aux(inputs, bin_edges)
 
-def reshape_aux_array(inputs, bin_edges):
-    '''
-    Reshape the four auxiliary 1D arrays into a 2D array shaped in such a way
-    to facilitate binning during computation of the v's.
-    :param inputs: list of four 1D numpy array of data to be binned
-    :param bin_edges:  1D numpy array of indices where the values in data go
-            from one bin to the next. Must include 0 and a None at the end.
-    :return: 2D numpy array of shape (4, bin_num, bin_len), zero padded in bins
-            with fewer than bin_len points
-    '''
-    # Stack list of inputs into a (4, Npnt) array
-    inputs_arr = np.vstack(inputs)
-    # Split the data into bins bounded by interpolation nodes
-    split_arr = np.split(inputs_arr, bin_edges, axis=1)
-    # Find the maximum length of the subarrays
-    max_length = max(subarray.shape[1] for subarray in split_arr)
-    # Zero-pad the subarrays along axis=1 to the maximum length
-    padded_arrs = [np.pad(subarray, ((0, 0), (0, max_length - subarray.shape[1])),
-                                 mode='constant') for subarray in split_arr]
-    # Stack the padded subarrays vertically
-    return np.stack(padded_arrs, axis=1)
 
 
 def getlm(lmax, szalm, i=None):
@@ -105,19 +72,3 @@ def unpad(arr, unpadded_len, axis=0):
     else:
         # No need for unpadding
         return arr
-
-def predict_memory_usage(num_elements, dtype):
-    '''
-    Predict the memory usage of an array of a given size and dtype
-    :param num_elements: int.
-        The number of elements in the array
-    :param dtype: np.dtype
-        The dtype of the array
-    :return: float
-        The predicted memory usage in bytes
-    '''
-    # Get the size of each element in bytes
-    element_size = dtype.itemsize
-    # Calculate total memory usage in bytes
-    total_memory = element_size * num_elements
-    return total_memory
