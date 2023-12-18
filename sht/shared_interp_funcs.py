@@ -18,15 +18,14 @@ except ImportError:
 def get_vs(mmax, phi_data_reshaped, reshaped_inputs, loop_in_JAX=True, N_chunks=None,
            pad=False, verbose=False):
     """
-    Wrapper function for get_vs_np and get_vs_jax. Defaults to JAX version when JAX is present.
+    Helper function for get_vs_np and get_vs_jax. Defaults to JAX version when JAX is present.
     :param mmax: int. Maximum m value in the calculation
     :param phi_data_reshaped: 2D numpy array of shape (bin_num, bin_len) with data phi values,
         zero-padded to length bin_len in bins with fewer points
     :param reshaped_inputs: 2D numpy array of shape (4, bin_num, bin_len) with zero padding as
         in phi_data_reshaped. The 1st dimension corresponds to the four auxiliary arrays in
         the calculation of the v's.
-    :param loop_in_JAX: bool. Whether to loop over m in JAX or in NumPy. Defaults to False,
-        because JAX doesn't support in-place operations, so it's quite a bit slower
+    :param loop_in_JAX: bool. Whether to loop over m in JAX (when available) or in NumPy.
     :param N_chunks: int (optional). Number of chunks to break the vmap into if using JAX.
         This helps avoid memory issues. Must be a divisor of the number of (nonnegative) ms.
         Default is None, in which case the code will choose the highest value that won't

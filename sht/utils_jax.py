@@ -15,7 +15,6 @@ def find_transitions(arr):
     '''
     return shared_utils.transition_indices(arr)
 
-
 def reshape_phi(data, bin_edges):
     '''
     Wrapper function to call reshape_phi_array from shared_utils
@@ -28,31 +27,11 @@ def reshape_aux(inputs, bin_edges):
     '''
     return shared_utils.reshape_aux(inputs, bin_edges)
 
-
 def getlm(lmax, szalm, i=None):
     '''
-    Get the l and m from index and lmax. From Healpy.
-    :param lmax: int. The maximum l defining the alm layout
-    :param szalm: int. The size of the alm array
-    :param i: int or None. The index for which to compute the l and m.
-            If None, the function returns l and m for i=0..Alm.getsize(lmax)
+    Wrapper around shared_utils's getlm
     '''
-    if i is None:
-        i = np.arange(szalm)
-    assert (
-            np.max(i) < szalm
-    ), "Invalid index, it should less than the max alm array length of {}".format(
-        szalm
-    )
-
-    with np.errstate(all="raise"):
-        m = (
-            np.ceil(
-                ((2 * lmax + 1) - np.sqrt((2 * lmax + 1) ** 2 - 8 * (i - lmax))) / 2
-            )
-        ).astype(int)
-        l = i - m * (2 * lmax + 1 - m) // 2
-    return (l, m)
+    return shared_utils.getlm(lmax, szalm, i)
 
 
 def move_to_device(arr, axis=0, pad_axes=None, verbose=False):
@@ -93,24 +72,21 @@ def move_to_device(arr, axis=0, pad_axes=None, verbose=False):
     return arr
 
 
-def init_array(Nl, Nx, Ndevices, axes=[0, 1]):
+def init_array(Nl, Nx, N_devices, axes=[0, 1]):
     '''
-    Helper function to initialize empty array with the appropriate sharding
-    structure, as opposed to generating it on a single device and moving it
-    Pads the input if necessary to have length along sharded dim that's
+    Helper function to initialize an empty array with the appropriate sharding
+    structure, as opposed to generating it on a single device and moving it.
+    Pads the input if necessary to have a length along sharded dim that's
     divisible by the number of devices
     '''
     # Initialize sharding scheme
     sharding = PositionalSharding(mesh_utils.create_device_mesh(N_devices))
     sharding = sharding.reshape((N_devices, 1, 1))
-
     # This is a trick to shard the array at instantiation
     @partial(jax.jit, static_argnums=(0, 1, 2), out_shardings=sharding)
     def f(Nl, Nx, axes=[0, 1]):
         return pad_to_shard(jax.numpy.zeros((Nl, Nl, Nx)), axes)
-
-    return f(Nl, Nx)
-
+    return f(Nl, Nx, axes)
 
 def pad_to_shard(arr, axes=0):
     '''
@@ -167,14 +143,14 @@ def unpad(arr, unpadded_len, axis=0):
 
 def to_hp_convention(alm_grid_real, alm_grid_imag):
     '''
-    Get a 1D vector of alms in the healpy convention from a 2D array of alms
+    Get a 1D vector of alms in the healpy convention from an (Nl, Nl)
+    array in the indexing scheme indx = lambda ell, m: (m, ell - m)
     :param alm: np.ndarray
         2D array of size (Nl, Nl) with alms in the indexing convention where the ith
-        row corresponds to i=m and  the jth column corresponds to j=ell-m
+        row corresponds to i=m and the jth column corresponds to j=ell-m
     :return: np.ndarray
         1D array of alms in Healpy convention
     '''
-
     def flatten_mat(mat, flat_idx):
         # First roll so it looks like an upper triangular matrix. Then extract the
         # upper triangular indices

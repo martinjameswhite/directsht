@@ -72,3 +72,28 @@ def predict_memory_usage(num_elements, dtype):
     # Calculate total memory usage in bytes
     total_memory = element_size * num_elements
     return total_memory
+
+def getlm(lmax, szalm, i=None):
+    '''
+    Get the l and m from index and lmax. From Healpy.
+    :param lmax: int. The maximum l defining the alm layout
+    :param szalm: int. The size of the alm array
+    :param i: int or None. The index for which to compute the l and m.
+            If None, the function returns l and m for i=0..Alm.getsize(lmax)
+    '''
+    if i is None:
+        i = np.arange(szalm)
+    assert (
+            np.max(i) < szalm
+    ), "Invalid index, it should less than the max alm array length of {}".format(
+        szalm
+    )
+
+    with np.errstate(all="raise"):
+        m = (
+            np.ceil(
+                ((2 * lmax + 1) - np.sqrt((2 * lmax + 1) ** 2 - 8 * (i - lmax))) / 2
+            )
+        ).astype(int)
+        l = i - m * (2 * lmax + 1 - m) // 2
+    return (l, m)
