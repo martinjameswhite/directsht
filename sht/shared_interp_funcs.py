@@ -100,6 +100,6 @@ def get_vs_at_m(m, phi_data_reshaped, reshaped_inputs):
     NOTE: Naively, this function should be jitted. However, the overhead from JIT compilation
     is longer than the time it takes to run the function, so we don't jit it.
     """
-    vs_r, vs_i = [interp_funcs.collapse(reshaped_inputs * phi_dep) for phi_dep in
+    vs_r, vs_i = [interp_funcs.accumulate(reshaped_inputs * phi_dep) for phi_dep in
                   [jnp.cos(m * phi_data_reshaped), jnp.sin(m * phi_data_reshaped)]]
     return vs_r, vs_i

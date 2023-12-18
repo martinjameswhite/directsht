@@ -18,7 +18,7 @@ def get_vs(mmax, phi_data_reshaped, reshaped_inputs, loop_in_JAX=True, N_chunks=
                                       pad=pad, verbose=verbose)
 
 @partial(jit, donate_argnums=(0,))
-def collapse(arr):
+def accumulate(arr):
     '''
     Sum over the second axis of a 2D array -- i.e., the key binning operation!
     :param arr: 2D numpy array, where the axis 0 contains the different bins
