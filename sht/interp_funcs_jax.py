@@ -7,7 +7,6 @@ jax_present = True
 
 default_dtype = None # Replace if you want to use a different dtype from the env default
 
-#@partial(jit, donate_argnums=(1,2))
 def get_vs(mmax, phi_data_reshaped, reshaped_inputs, loop_in_JAX=True, N_chunks=None,
            pad=False, verbose=False):
     """
@@ -27,7 +26,7 @@ def accumulate(arr):
     '''
     return jnp.sum(arr, axis=-1)
 
-@partial(jit, donate_argnums=(4,))
+@jit
 def get_alm_jax(Ylm_i, Ylm_ip1, dYlm_i, dYlm_ip1, vs):
     """
     The key function: get alm by summing over all interpolated, weighted
