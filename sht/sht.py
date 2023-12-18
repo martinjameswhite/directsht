@@ -55,6 +55,18 @@ class DirectSHT:
         self.x, self.Yv, self.Yd = xx, Yv, Yd
         #
 
+    def indx(self,ell,m):
+        """
+        The index in the grid storing Ylm for ell>=0, 0<=m<=ell.
+        Matches the Healpix convention.
+        Note: this should match the indexing in ext_slow_recurrence
+        and ext_der_slow_recurrence.
+        :param  ell: ell value to return.
+        :param  m:   m value to return.
+        :return ii:  Index value in the value and derivatives grids.
+        """
+        ii= (m*(2*self.Nell-1-m))//2 + ell
+        return(ii)
     def __call__(self, theta, phi, wt, reg_factor=1., verbose=True):
         """
         Returns alm for a collection of real-valued points at (theta,phi),
