@@ -16,7 +16,8 @@ def null_unphys(Yv, Yd):
     mask = jnp.array([jnp.roll(mask[i, :], -i) for i in range(len(mask))])
     Yv, Yd = [jnp.nan_to_num(Y) * mask[:, :, None] for Y in [Yv, Yd]]
     return (Yv, Yd)
-def compute_Plm_table(Nl, Nx, xmax):
+
+def compute_Plm_table(Nl, xx):
     """Use recurrence relations to compute a table of Ylm[cos(theta),0]
     for ell>=0, m>=0, x>=0.  Can use symmetries to get m<0 and/or x<0,
     viz. (-1)^m for m<0 and (-1)^(ell-m) for x<0.
@@ -49,7 +50,6 @@ def compute_Plm_table(Nl, Nx, xmax):
     #
     @partial(jit, donate_argnums=(1,))
     def partial_fun_Ylm(m, Ylm_row, xx):
-        # Ylm_row.shape = (Nl, Nx)
         body_fun = lambda ell, Ylm_at_m: full_fun_Ylm(ell, m, Ylm_at_m, xx)
         return fori_loop(0, len(Ylm_row) - 2, body_fun, Ylm_row)
 
@@ -72,8 +72,7 @@ def compute_Plm_table(Nl, Nx, xmax):
     # This should match the convention used in the SHT class below.
     # We shift all the entries so that rows start at ell=m. This helps recursion.
     indx = lambda ell, m: (m, ell - m)
-    # Set up a regular grid of x values.
-    xx = jnp.arange(Nx) / float(Nx - 1) * xmax
+    Nx = len(xx)
     sx = jnp.sqrt(1 - xx ** 2)
     # Distribute the grid across devices if possible
     Plm = jnp.zeros((Nl, Nl, Nx))
@@ -95,7 +94,7 @@ def compute_Plm_table(Nl, Nx, xmax):
     return (Plm)
 
 
-def compute_der_table(Nl, Nx, xmax, Yv):
+def compute_der_table(Nl, xx, Yv):
     """Use recurrence relations to compute a table of derivatives of
     Ylm[cos(theta),0] for ell>=0, m>=0, x=>0.
     Assumes the Ylm table has already been built (passed as Yv).
@@ -138,7 +137,7 @@ def compute_der_table(Nl, Nx, xmax, Yv):
         return vmap(fill_dYmm, (0, None, 0, 0, None, None))(rows, 0, Yv, Yd, xx, omx2)
 
     #
-    xx = jnp.arange(Nx) / float(Nx - 1) * xmax
+    Nx = len(xx)
     # This should match the convention used in the SHT class below.
     indx = lambda ell, m: (m, ell - m)
     # Distribute the grid across devices if possible

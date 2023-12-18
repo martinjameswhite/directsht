@@ -16,8 +16,6 @@ try:
     import interp_funcs_jax as interp
     import utils_jax as utils
     from utils_jax import move_to_device
-    # Choose the number of devices we'll be parallelizing across
-    N_devices = len(devices())
 except ImportError:
     jax_present = False
     move_to_device = lambda x, **kwargs: x  # Dummy definition for fallback
@@ -26,16 +24,15 @@ except ImportError:
     import legendre_py as legendre
     import interp_funcs_py as interp
     import utils_py as utils
-    N_devices = 1
 
 
 class DirectSHT:
     """Brute-force spherical harmonic transforms."""
     def __init__(self, Nell, Nx, xmax=0.875, dflt_type='float64', null_unphysical=True):
         """Initialize the class, build the interpolation tables.
-        :param  Nell: Number of ells, and hence ms.
-        :param  Nx:   Number of x grid points.
-        :param xmax:  Maximum value of |cos(theta)| to compute.
+        :param  Nell: int. Number of ells, and hence ms.
+        :param  Nx:   int. Number of x grid points.
+        :param xmax:  float. Maximum value of |cos(theta)| to compute.
         :param dflt_type: str. Default dtype to use for all arrays. Defaults to 'float64'.
             Double precision is strongly recommended.
         :param null_unphysical: bool. Only has an effect if jax_present=True. If True,
@@ -44,10 +41,11 @@ class DirectSHT:
             null_unphysical=False is marginally faster).
         """
         self.Nell, self.Nx, self.xmax = Nell, Nx, xmax
+        # Set up a regular grid of x values.
         xx = jnp.arange(Nx, dtype=dflt_type) if jax_present else np.arange(Nx, dtype=dflt_type)
         xx *= xmax / float(Nx - 1)
-        Yv = legendre.compute_Plm_table(Nell, Nx, xmax)
-        Yd = legendre.compute_der_table(Nell, Nx, xmax, Yv)
+        Yv = legendre.compute_Plm_table(Nell, xx)
+        Yd = legendre.compute_der_table(Nell, xx, Yv)
         # Multiply by the  (2ell+1)/4pi normalization factor relating Plm to Ylm
         Yv, Yd = [legendre.norm_ext(Y, self.Nell) for Y in [Yv, Yd]]
         # Null unphysical entries (id needed)

@@ -1,7 +1,7 @@
 import numpy as np
 import numba as nb
 
-def compute_Plm_table(Nl, Nx, xmax):
+def compute_Plm_table(Nl, xx):
     """Use recurrence relations to compute a table of Ylm[cos(theta),0]
     for ell>=0, m>=0, x>=0.  Can use symmetries to get m<0 and/or x<0,
     viz. (-1)^m for m<0 and (-1)^(ell-m) for x<0.
@@ -10,8 +10,7 @@ def compute_Plm_table(Nl, Nx, xmax):
     :return Y[ell,m,x=Cos[theta],0] without the sqrt{(2ell+1)/4pi}
     normalization (that is applied in __init__)
     """
-    # Set up a regular grid of x values.
-    xx = np.arange(Nx, dtype='float64') * xmax / float(Nx - 1)
+    Nx = len(xx)
     sx = np.sqrt(1 - xx ** 2)
     indx = lambda ell, m : (m * (2 * Nl - 1 - m)) // 2 + ell
     Plm = np.zeros(((Nl * (Nl + 1)) // 2, Nx), dtype='float64')
@@ -39,6 +38,28 @@ def compute_Plm_table(Nl, Nx, xmax):
     Plm = ext_slow_recurrence(Nl, xx, Plm)
     return (Plm)
 
+def compute_der_table(Nl,xx,Yv):
+    """Use recurrence relations to compute a table of derivatives of
+    Ylm[cos(theta),0] for ell>=0, m>=0, x=>0.
+    Assumes the Ylm table has already been built (passed as Yv).
+    :param  Nl: Number of ells in the derivative grid.
+    :param  xx: Values of cos(theta) at which to evaluate derivs.
+    :param  Yv: Already computed Ylm values.
+    :return Yd: The table of first derivatives.
+    """
+    indx = lambda ell, m : (m * (2 * Nl - 1 - m)) // 2 + ell
+    Yd = np.zeros( ((Nl*(Nl+1))//2,xx.size), dtype='float64')
+    Yd[indx(1,0),:] = np.ones_like(xx)
+    # Do the case m=0 separately.
+    for ell in range(2,Nl):
+        i0,i1    = indx(ell,0),indx(ell-1,0)
+        Yd[i0,:] = ell/(1-xx**2)*(Yv[i1,:]-xx*Yv[i0,:])
+    # then build the m>0 tables.
+    _  = ext_der_slow_recurrence( 1,xx,Yv,Yd)
+    Yd = ext_der_slow_recurrence(Nl,xx,Yv,Yd)
+    return(Yd)
+    #
+
 def null_unphys(a, b):
     # Dummy function. It just returns the inputs.
     return (a, b)
@@ -60,28 +81,6 @@ def norm_ext(Y, Nl):
             Y[ii, :] *= fact
     return (Y)
 
-def compute_der_table(Nl,Nx,xmax,Yv):
-    """Use recurrence relations to compute a table of derivatives of
-    Ylm[cos(theta),0] for ell>=0, m>=0, x=>0.
-    Assumes the Ylm table has already been built (passed as Yv).
-    :param  Nl: Number of ells in the derivative grid.
-    :param  xx: Values of cos(theta) at which to evaluate derivs.
-    :param  Yv: Already computed Ylm values.
-    :return Yd: The table of first derivatives.
-    """
-    indx = lambda ell, m : (m * (2 * Nl - 1 - m)) // 2 + ell
-    xx = np.arange(Nx, dtype='float64') * xmax / float(Nx - 1)
-    Yd = np.zeros( ((Nl*(Nl+1))//2,xx.size), dtype='float64')
-    Yd[indx(1,0),:] = np.ones_like(xx)
-    # Do the case m=0 separately.
-    for ell in range(2,Nl):
-        i0,i1    = indx(ell,0),indx(ell-1,0)
-        Yd[i0,:] = ell/(1-xx**2)*(Yv[i1,:]-xx*Yv[i0,:])
-    # then build the m>0 tables.
-    _  = ext_der_slow_recurrence( 1,xx,Yv,Yd)
-    Yd = ext_der_slow_recurrence(Nl,xx,Yv,Yd)
-    return(Yd)
-    #
 @nb.njit
 def ext_slow_recurrence(Nl,xx,Ylm):
     """Pull out the slow, multi-loop piece of the recurrence.  In
@@ -101,8 +100,6 @@ def ext_slow_recurrence(Nl,xx,Ylm):
             Ylm[i0,:]  *= fact1/(ell-m)
     return(Ylm)
     #
-
-
 
 @nb.njit
 def ext_der_slow_recurrence(Nl,xx,Yv,Yd):
