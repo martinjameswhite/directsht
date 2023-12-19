@@ -1,4 +1,4 @@
-# direct_sht
+# directsht
 
 Direct spherical harmonic transform code for point sets on the sphere.
 
