@@ -55,8 +55,8 @@ class DirectSHT:
         #
     def indx(self,ell,m):
         """
-        The index in the output array produced when calling the object
-        that stores Ylm for ell>=0, 0<=m<=ell. Matches the Healpix convention.
+        The index of a given (ell,m) in the alm array produced when calling
+        and instance of the DirectSHT class. Matches the Healpix convention.
         :param  ell: ell value to return.
         :param  m:   m value to return.
         :return ii:  Index value in the output alm array
@@ -64,6 +64,32 @@ class DirectSHT:
         ii= (m*(2*self.Nell-1-m))//2 + ell
         return(ii)
         #
+    def get_Ylm(self, ell, m):
+        '''
+        Return the spherical harmonics Ylm(x_i, 0) for a given ell and m,
+        where x_i = cos\theta_i are the sampled grid points.
+        :param ell: int.
+        :param m:   int.
+        :return:   1D numpy array of length Nx.
+        '''
+        if jax_present:
+            return(self.Yv[m, ell-m, :])
+        else:
+            return(self.Yv[self.indx(ell,m), :])
+
+    def get_dYlm(self, ell, m):
+        '''
+        Return the derivate w.r.t. x of Ylm(x_i, 0) for a given ell and m,
+        where x_i = cos\theta_i are the sampled grid points.
+        :param ell: int.
+        :param m:   int.
+        :return:   1D numpy array of length Nx.
+        '''
+        if jax_present:
+            return(self.Yd[m, ell-m, :])
+        else:
+            return(self.Yd[self.indx(ell,m), :])
+
     def alm2cl(self,alm):
         """
         Returns the pseudo-spectrum given alms.
