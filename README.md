@@ -3,7 +3,7 @@
 Direct spherical harmonic transform code for point sets on the sphere.
 More details can be found in
 
-http://arxiv.org/abs/2312.12285
+http://arxiv.org/abs/2312.12285 \
 Harmonic analysis of discrete tracers of large-scale structure
 
 The code can be installed with
