@@ -4,7 +4,7 @@ Given a set of points on the sphere, with weights, computes the harmonic
 transform coefficients by direct summation.  See the notebooks directory
 in the repo for examples of how to use the code or the arXiv paper
 
-http://arxiv.org/abs/2312.12285\
+http://arxiv.org/abs/2312.12285 \
 Harmonic analysis of discrete tracers of large-scale structure
 
 for more details.
