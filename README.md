@@ -1,16 +1,21 @@
 # directsht
 
 Direct spherical harmonic transform code for point sets on the sphere.
+More details can be found in
+
+http://arxiv.org/abs/2312.12285
+Harmonic analysis of discrete tracers of large-scale structure
 
 The code can be installed with
-
+```
 python3 -m pip install -v git+https://github.com/martinjameswhite/direct_sht
-
+```
 It requires numpy, scipy and numba.  If JAX is available, it can be used to
 speed up the computation, but the code will automatically fall back to numpy
 if JAX is not present.  Some of the notebooks use healpy for visualization.
 
 The code is much faster when run on GPUs. When they are available and JAX is installed, the code automatically distributes computation and memory across them.
+
 ***
 
 ## Usage
