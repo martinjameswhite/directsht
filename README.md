@@ -8,7 +8,7 @@ Harmonic analysis of discrete tracers of large-scale structure
 
 The code can be installed with
 ```
-python3 -m pip install -v git+https://github.com/martinjameswhite/direct_sht
+python3 -m pip install -v git+https://github.com/martinjameswhite/directsht
 ```
 It requires numpy, scipy and numba.  If JAX is available, it can be used to
 speed up the computation, but the code will automatically fall back to numpy
