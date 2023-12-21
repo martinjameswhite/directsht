@@ -3,7 +3,7 @@ import jax
 from jax.sharding import PositionalSharding
 from functools import partial
 from jax.experimental import mesh_utils
-import shared_utils
+import sht.shared_utils
 
 # Choose the number of devices we'll be parallelizing across
 N_devices = len(jax.devices())
