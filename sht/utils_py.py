@@ -1,5 +1,5 @@
 import numpy as np
-import sht.shared_utils
+import sht.shared_utils as shared_utils
 
 N_devices = 1
 
