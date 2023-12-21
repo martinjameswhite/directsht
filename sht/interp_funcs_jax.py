@@ -1,7 +1,9 @@
 from jax import jit
 import jax.numpy as jnp
 from functools import partial
-import shared_interp_funcs
+
+import sht.shared_interp_funcs as shared_interp_funcs
+
 jax_present = True
 
 
