@@ -9,7 +9,7 @@ import numpy  as np
 import sys
 
 sys.path.append('../sht')
-from  threej000 import Wigner3j
+from  sht.threej000 import Wigner3j
 
 
 
