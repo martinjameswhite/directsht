@@ -1,8 +1,8 @@
 import numpy as np
 import psutil
 
-#import sht.interp_funcs_py
-#import sht.shared_utils
+import sht.interp_funcs_py as interp_funcs_py
+import sht.shared_utils    as shared_utils
 
 try:
     jax_present = True
