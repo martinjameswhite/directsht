@@ -12,18 +12,18 @@ try:
     jax_present = True
     from jax import vmap, jit, devices
     import jax.numpy as jnp
-    import legendre_jax as legendre
-    import interp_funcs_jax as interp
-    import utils_jax as utils
-    from utils_jax import move_to_device
+    import sht.legendre_jax as legendre
+    import sht.interp_funcs_jax as interp
+    import sht.utils_jax as utils
+    from   sht.utils_jax import move_to_device
 except ImportError:
     jax_present = False
     move_to_device = lambda x, **kwargs: x  # Dummy definition for fallback
     print("JAX not found. Falling back to NumPy.")
     from numba import njit as jit
-    import legendre_py as legendre
-    import interp_funcs_py as interp
-    import utils_py as utils
+    import sht.legendre_py as legendre
+    import sht.interp_funcs_py as interp
+    import sht.utils_py as utils
 
 
 class DirectSHT:
