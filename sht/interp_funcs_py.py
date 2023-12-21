@@ -1,7 +1,7 @@
 import numpy as np
 import numba as nb
 
-import sht.shared_interp_funcs
+import sht.shared_interp_funcs as shared_interp_funcs
 
 
 def get_vs(mmax, phi_data_reshaped, reshaped_inputs, loop_in_JAX=True, N_chunks=None,
