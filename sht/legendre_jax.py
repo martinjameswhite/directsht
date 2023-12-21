@@ -1,10 +1,12 @@
-import numpy as np
-from jax import vmap, jit, devices
-from utils_jax import move_to_device
-import utils_jax as utils
-import jax.numpy as jnp
-from functools import partial
-from jax.lax import fori_loop
+import numpy         as np
+import jax.numpy     as jnp
+from   jax           import vmap, jit, devices
+from   functools     import partial
+from   jax.lax       import fori_loop
+
+from   sht.utils_jax import move_to_device
+import sht.utils_jax as utils
+
 
 # Choose the number of devices we'll be parallelizing across
 N_devices = len(devices())
