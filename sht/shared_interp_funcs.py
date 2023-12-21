@@ -1,17 +1,18 @@
 import numpy as np
-import interp_funcs_py
 import psutil
-import shared_utils
+
+#import sht.interp_funcs_py
+#import sht.shared_utils
 
 try:
     jax_present = True
     from jax import vmap, jit, devices
     import jax.numpy as jnp
-    import interp_funcs_jax as interp_funcs
+    import sht.interp_funcs_jax as interp_funcs
 except ImportError:
     jax_present = False
     import numpy as jnp
-    import interp_funcs_py as interp_funcs
+    import sht.interp_funcs_py as interp_funcs
     print("JAX not found. Falling back to NumPy.")
 
 
