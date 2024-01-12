@@ -5,7 +5,8 @@
 # Uses Numba.
 #
 #
-import numpy as np
+import numpy  as np
+import healpy as hp
 import time
 
 try:
@@ -28,7 +29,7 @@ except ImportError:
 
 class DirectSHT:
     """Brute-force spherical harmonic transforms."""
-    def __init__(self, Nell, Nx, xmax=0.875, dflt_type='float64', null_unphysical=True):
+    def __init__(self, Nell, Nx, xmax=0.75, dflt_type='float64', null_unphysical=True):
         """Initialize the class, build the interpolation tables.
         :param  Nell: int. Number of ells, and hence ms.
         :param  Nx:   int. Number of x grid points.
@@ -106,8 +107,38 @@ class DirectSHT:
             cl[ell] /= 2*ell + 1.
         return(cl)
         #
-
-    def __call__(self, theta, phi, wt, reg_factor=1., verbose=True):
+        
+    def __call__(self,t,p,w):
+        """
+        Returns alm for a collection of real-valued points at (t,p),
+        in radians, with weights wt.
+        :param t: 1D numpy array of theta values for each point.
+            Must be between [0,pi], and also satisfy [ACos[xmax],ACos[-xmax]
+        :param p: 1D numpy array of phi values for each point.
+            Must be between [0,2pi].
+        :param w: 1D numpy array of weights for each point.
+        :return: alm in the Healpix indexing convention,
+                 i.e., complex coefficients alm[m*(2*lmax+1-m)/2+l]
+                 with l in [0, lmax] and m in [0, l]
+        This is a wrapper to the "basic_sht" routine that simply handles
+        rotations and the polar/equatorial split (using healpy).
+        """
+        alms = np.zeros(self.Nlm,dtype='complex')
+        xval = np.abs(np.cos(t))
+        pol  = np.nonzero(xval>=self.xmax)[0]
+        equ  = np.nonzero(xval< self.xmax)[0]
+        if len(pol)>0:
+            yrot = hp.rotator.Rotator(rot=(0,90,0),eulertype='ZYZ',deg=True)
+            tp,pp= yrot(t[pol],p[pol])
+            rlms = self.basic_sht(tp,pp,w[pol])
+            yrot = hp.rotator.Rotator(rot=(0,90,0),eulertype='ZYZ',deg=True,inv=True)
+            alms+= yrot.rotate_alm(rlms)
+        if len(equ)>0:
+            alms += self.basic_sht(t[equ],p[equ],w[equ])
+        return(alms)
+        #
+    
+    def basic_sht(self, theta, phi, wt, reg_factor=1., verbose=True):
         """
         Returns alm for a collection of real-valued points at (theta,phi),
         in radians, with weights wt.
