@@ -168,7 +168,7 @@ class DirectSHT:
         wt *= reg_factor
         # Get the indexing of ell and m in the Healpix convention for
         # later use
-        ell_ordering, m_ordering = utils.getlm(self.Nell-1, (self.Nell*(self.Nell+1))//2)
+        ell_ordering, m_ordering = utils.getlm(self.Nell-1, self.Nlm)
         # Eventually, we will need to multiply the alm's by (-1)^{ell-m}
         # for x=cos\theta<0
         parity_factor = (-1)**(ell_ordering - m_ordering)
@@ -256,7 +256,7 @@ class DirectSHT:
                 # JIT compile the get_alm function
                 get_alm_jitted = jit(nopython=True)(interp.get_alm_np)
                 # Temporary storage for alms
-                alm_grid = np.zeros((self.Nell*(self.Nell+1))//2, dtype='complex128')
+                alm_grid = np.zeros(self.Nlm, dtype='complex128')
                 vs_tot = vs_real - 1j * vs_imag
                 # TODO: parallelize this
                 # Note that we scale the derivatives by dx, as required by Hermite interpolation
