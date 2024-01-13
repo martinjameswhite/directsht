@@ -42,6 +42,7 @@ class DirectSHT:
             null_unphysical=False is marginally faster).
         """
         self.Nell, self.Nx, self.xmax = Nell, Nx, xmax
+        self.Nlm  = (Nell*(Nell+1))//2 # Total (l,m) size.
         # Set up a regular grid of x values.
         xx = jnp.arange(Nx, dtype=dflt_type) if jax_present else np.arange(Nx, dtype=dflt_type)
         xx *= xmax / float(Nx - 1)
