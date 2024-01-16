@@ -21,7 +21,7 @@ fullpath = os.path.dirname(__file__) + "/"
 
 class DirectSHT:
     """Brute-force spherical harmonic transforms."""
-    def __init__(self,Nell,Nx,xmax=0.875):
+    def __init__(self,Nell,Nx,xmax=0.75):
         """Initialize the class, build the interpolation tables.
         :param  Nell: Number of ells, and hence ms.
         :param  Nx:   Number of x grid points.
