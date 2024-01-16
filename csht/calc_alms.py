@@ -15,7 +15,6 @@ def calc_alms(t,p,w,sht):
     xval = np.abs(np.cos(t))
     pol  = np.nonzero(xval>=sht.xmax)[0]
     equ  = np.nonzero(xval< sht.xmax)[0]
-    print("** Pol/Equ is {:d}/{:d}.".format(len(pol),len(equ)),flush=True)
     if len(pol)>0:
         rotn = (0,90,0)
         yrot = hp.rotator.Rotator(rot=rotn,eulertype='ZYZ',deg=True)
