@@ -6,7 +6,7 @@
 # code running under this environment as well.
 #
 module load cudatoolkit
-module load cudnn/
+module load cudnn
 module load python
 # Verify the versions of cudatoolkit and cudnn are compatible with JAX
 # module list
@@ -23,8 +23,10 @@ python3 -Xfrozen_modules=off -m ipykernel \
 conda install -c conda-forge numba healpy -y
 #
 python3 -m pip install --upgrade "jax[cuda12_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
-
-
-
+#
+#
 # test installation
 # python -c "from jax.lib import xla_bridge; print(xla_bridge.get_backend().platform); import jax.numpy as jnp; print(jnp.exp(2.34))"
+#
+python3 -m pip install -v git+https://github.com/martinjameswhite/directsht
+#
