@@ -55,6 +55,4 @@ class and using the MaskDeconvolution class to handle the mode-coupling matrices
 and window functions) and look at how the code performs in Jupyter notebooks within
 the `notebooks` directory.  Please look there for further information.
 
-#### Running our Jupyter notebooks on NERSC GPUs
-Before you can run our explanatory notebooks on NERSC GPUs using JAX, you must ensure the `cudatoolkit` module can be accessed from within Jupyter. Instructions on how to do this can be found [here](https://docs.nersc.gov/development/languages/python/using-python-perlmutter/#using-cudatoolkit-module-in-jupyter). Similar steps may be required for other computing clusters.
 
