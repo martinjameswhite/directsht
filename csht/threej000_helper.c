@@ -65,10 +65,13 @@ int     ell,j1,j2,j3;
 long    ii;
   for (j1=0; j1<Nl; j1++)
     for (j2=0; j2<=j1; j2++)
-#pragma omp parallel for private(j3,ii), shared(j1,j2,Nl,store), schedule(static,8)
+#pragma omp parallel for private(j3,ii), shared(j1,j2,Nl,store), schedule(static,4)
       for (j3=0; j3<=j2; j3++) {
         ii = (j1*(j1+1L)*(j1+2L))/6 + (j2*(j2+1L))/2 + j3;
-        store[ii] = calc_3j(j1,j2,j3);
+        if (j3<j1-j2)
+          store[ii] = 0.0;
+        else
+          store[ii] = calc_3j(j1,j2,j3);
       }
   return(0);
 }
