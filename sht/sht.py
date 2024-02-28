@@ -114,7 +114,7 @@ class DirectSHT:
         Returns alm for a collection of real-valued points at (t,p),
         in radians, with weights wt.
         :param t: 1D numpy array of theta values for each point.
-            Must be between [0,pi], and also satisfy [ACos[xmax],ACos[-xmax]
+            Must be between [0,pi]
         :param p: 1D numpy array of phi values for each point.
             Must be between [0,2pi].
         :param w: 1D numpy array of weights for each point.
