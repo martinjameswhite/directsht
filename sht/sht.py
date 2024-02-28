@@ -29,7 +29,7 @@ except ImportError:
 
 class DirectSHT:
     """Brute-force spherical harmonic transforms."""
-    def __init__(self, Nell, Nx, xmax=0.75, dflt_type='float64', null_unphysical=True):
+    def __init__(self, Nell, Nx, xmax=np.pi/4+0.01, dflt_type='float64', null_unphysical=True):
         """Initialize the class, build the interpolation tables.
         :param  Nell: int. Number of ells, and hence ms.
         :param  Nx:   int. Number of x grid points.
@@ -128,13 +128,23 @@ class DirectSHT:
         xval = np.abs(np.cos(t))
         pol  = np.nonzero(xval>=self.xmax)[0]
         equ  = np.nonzero(xval< self.xmax)[0]
+        assertion_success = False
         if len(pol)>0:
             yrot = hp.rotator.Rotator(rot=(0,90,0),eulertype='ZYZ',deg=True)
             tp,pp= yrot(t[pol],p[pol])
-            rlms = self.basic_sht(tp,pp,w[pol])
-            yrot = hp.rotator.Rotator(rot=(0,90,0),eulertype='ZYZ',deg=True,inv=True)
-            alms+= yrot.rotate_alm(rlms)
-        if len(equ)>0:
+            try:
+                rlms = self.basic_sht(tp,pp,w[pol])
+                yrot = hp.rotator.Rotator(rot=(0, 90, 0), eulertype='ZYZ', deg=True, inv=True)
+                alms += yrot.rotate_alm(rlms)
+                assertion_success = True
+            except AssertionError as ae:
+                # The error may have been due xmax being smaller than pi/4
+                print(f"AssertionError in basic_sht: {ae}")
+                if self.xmax < np.pi/4:
+                    print("Warning: xmax is smaller than pi/4, so some points may"
+                           " still lie in the polar cap after rotation by 90 degrees."
+                           " Trying increasing it.")
+        if assertion_success and len(equ)>0:
             alms += self.basic_sht(t[equ],p[equ],w[equ])
         return(alms)
         #
