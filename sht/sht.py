@@ -29,7 +29,7 @@ except ImportError:
 
 class DirectSHT:
     """Brute-force spherical harmonic transforms."""
-    def __init__(self, Nell, Nx, xmax=np.pi/4+0.01, dflt_type='float64', null_unphysical=True):
+    def __init__(self, Nell, Nx, xmax=0.75, dflt_type='float64', null_unphysical=True):
         """Initialize the class, build the interpolation tables.
         :param  Nell: int. Number of ells, and hence ms.
         :param  Nx:   int. Number of x grid points.
