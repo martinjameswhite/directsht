@@ -22,7 +22,7 @@ python3 -Xfrozen_modules=off -m ipykernel \
 #
 conda install -c conda-forge numba healpy -y
 #
-python3 -m pip install --upgrade "jax[cuda12_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+python3 -m pip install --upgrade "jax[cuda12_pip]==0.4.23" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 #
 #
 # test installation
