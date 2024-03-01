@@ -138,10 +138,10 @@ class DirectSHT:
                 alms += yrot.rotate_alm(rlms)
                 assertion_success = True
             except AssertionError as ae:
-                # The error may have been due xmax being smaller than pi/4
+                # The error may have been due xmax being smaller than sin(pi/4)
                 print(f"AssertionError in basic_sht: {ae}")
-                if self.xmax < np.pi/4:
-                    print("Warning: xmax is smaller than pi/4, so some points may"
+                if self.xmax < np.sin(np.pi/4):
+                    print("Warning: xmax is smaller than sin(pi/4), so some points may"
                            " still lie in the polar cap after rotation by 90 degrees."
                            " Trying increasing it.")
         if assertion_success and len(equ)>0:
