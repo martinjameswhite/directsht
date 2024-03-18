@@ -199,6 +199,7 @@ class MaskDeconvolution:
         version of vec.  This is a "helper" function.
         :param type: Type of binning.
                      'linear' (default) gives linear binning.
+        :param start: the lowest multipole, i.e. start position.
         :param step: size of linear step.
         :return 2D array of shape (Nbins,lmax).
         """
