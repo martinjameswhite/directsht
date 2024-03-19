@@ -31,7 +31,7 @@ double	xx,omx2,dx,fact1,fact2;
     i0 = Nx*indx(ell-0,0,Nl);
     i1 = Nx*indx(ell-1,0,Nl);
     i2 = Nx*indx(ell-2,0,Nl);
-  #pragma omp parallel for private(ix,xx), shared(Nl,Nx,dx,ell,i0,i1,i2,Yv)
+#pragma omp parallel for private(ix,xx), shared(Nl,Nx,dx,ell,i0,i1,i2,Yv)
     for (ix=0; ix<Nx; ix++) {
       xx        = ix * dx;
       Yv[i0+ix] = (2-1./ell)*xx*Yv[i1+ix] - (1.0-1./ell)*Yv[i2+ix];
@@ -41,7 +41,7 @@ double	xx,omx2,dx,fact1,fact2;
   for (m=1; m<Nl; m++) {
     i0 = Nx*indx(m-0,m-0,Nl);
     i1 = Nx*indx(m-1,m-1,Nl);
-  #pragma omp parallel for private(ix,xx), shared(Nl,Nx,dx,m,i0,i1,Yv)
+#pragma omp parallel for private(ix,xx), shared(Nl,Nx,dx,m,i0,i1,Yv)
     for (ix=0; ix<Nx; ix++) {
       xx        = ix * dx;
       Yv[i0+ix] = -sqrt( (1.0-0.5/m)*(1.0-xx*xx) )*Yv[i1+ix];
@@ -51,7 +51,7 @@ double	xx,omx2,dx,fact1,fact2;
   for (m=1; m<Nl-1; m++) {
     i0 = Nx*indx(m+0,m,Nl);
     i1 = Nx*indx(m+1,m,Nl);
-  #pragma omp parallel for private(ix,xx), shared(Nl,Nx,dx,m,i0,i1,Yv)
+#pragma omp parallel for private(ix,xx), shared(Nl,Nx,dx,m,i0,i1,Yv)
     for (ix=0; ix<Nx; ix++) {
       xx        = ix * dx;
       Yv[i1+ix] = sqrt(2*m+1.)*xx*Yv[i0+ix];
@@ -65,7 +65,7 @@ double	xx,omx2,dx,fact1,fact2;
       i2    = Nx*indx(ell-2,m,Nl);
       fact1 = sqrt( (double)(ell-m)/(double)(ell+m) );
       fact2 = sqrt( (ell-m-1.)/(ell+m-1.) );
-    #pragma omp parallel for private(ix,xx), shared(Nl,Nx,dx,ell,m,i0,i1,i2,fact1,fact2,Yv), schedule(static)
+#pragma omp parallel for private(ix,xx), shared(Nl,Nx,dx,ell,m,i0,i1,i2,fact1,fact2,Yv), schedule(static)
       for (ix=0; ix<Nx; ix++) {
         xx        = ix * dx;
         Yv[i0+ix] = (2*ell-1)*xx*Yv[i1+ix] - (ell+m-1)*Yv[i2+ix]*fact2;
@@ -172,8 +172,6 @@ double	tt,t1,t2,s0,s1,s2,s3;
 
 #else
   
-
-/* The following code is currently both slow and incorrect. */
 
 int	do_transform(int Nl, int Nx, double xmax, double Yv[], double Yd[],
                  int Np, double cost[], double phi[], double wt[],
