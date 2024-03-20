@@ -6,16 +6,13 @@
 #
 
 import numpy  as np
-import sys
-
-sys.path.append('../sht')
 from  sht.threej000 import Wigner3j
 
 
 
 
 class MaskDeconvolution:
-    def __init__(self,Nl,W_l,verbose=True):
+    def __init__(self,Nl,W_l,verbose=True,precompute_3j_and_Mll=True):
         """
         Class to manage the mode-coupling of pseudo-Cls.
 
@@ -28,22 +25,30 @@ class MaskDeconvolution:
         :param W_l: 1D numpy array. Window function. Must be provided at every ell.
                     If shorter than 2*lmax will be right-padded with zeros.
         :param verbose: bool. Whether to print out information about progress
+        :param precompute_3j_and_Mll: bool. Whether to precompute the Wigner 3j symbols
+                    and the mode-coupling matrix on initialization.
         """
         self.Nl   = Nl
         self.lmax = Nl-1
         pad       = max(0,2*Nl-1-W_l.size)
         self.W_l  = np.pad(W_l,(0,pad),'constant',constant_values=0)
-        # 
-        # Precompute the expensive stuff
-        if verbose:
-            print("Precomputing Wigner 3j symbols...")
-        # Precompute the required Wigner 3js
-        self.w3j000 = Wigner3j(2*Nl-1)
-        #
-        if verbose:
-            print("Computing the mode-coupling matrix...")
-        # Compute the mode-coupling matrix
-        self.Mll = self.get_M()
+
+        if precompute_3j_and_Mll:
+            # 
+            # Precompute the expensive stuff
+            if verbose:
+                print("Precomputing Wigner 3j symbols...")
+            # Precompute the required Wigner 3js
+            self.w3j000 = Wigner3j(2*Nl-1)
+            #
+            if verbose:
+                print("Computing the mode-coupling matrix...")
+            # Compute the mode-coupling matrix
+            self.Mll = self.get_M()
+        else:
+            # Compute them when they're needed instead
+            self.w3j000 = None
+            self.Mll    = None
         #
     def __call__(self,Cl,bins,mode='deconvolution'):
         """
@@ -129,6 +134,10 @@ class MaskDeconvolution:
                 and normalizes the pseudo-Cls by a factor that leaves shot noise unchanged
         :return 2D numpy array
         """
+        if self.Mll is None:
+            print("Computing the mode-coupling matrix...")
+            self.Mll = self.get_M()
+
         if mode=='deconvolution':
             # Get the inverse binned matrix
             Mbb_inv = self.get_Mbb_inv(bins)
@@ -166,6 +175,10 @@ class MaskDeconvolution:
         :param debug: Bool. If True, check the matrix becomes the identity in the full-sky limit.
         :return: 2D array of shape (lmax+1,lmax+1) containing the mode-coupling matrix.
         """
+        if self.w3j000 is None:
+            print("Computing Wigner 3j symbols...")
+            self.w3j000 = Wigner3j(2*self.Nl-1)
+    
         M = np.zeros((self.lmax+1, self.lmax+1))
         for l1 in range(self.lmax+1):
             for l2 in range(self.lmax+1):
@@ -183,6 +196,9 @@ class MaskDeconvolution:
         Returns the bin-bin mode-coupling matrix.
         This is meant largely for internal use.
         """
+        if self.Mll is None:
+            print("Computing the mode-coupling matrix...")
+            self.Mll = self.get_M()
         # Use where the binning_matrix is non-zero to define the ells for which
         # our bandpowers would be assumed to be constants.
         bins_no_wt = np.zeros_like(bins)
