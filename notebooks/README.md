@@ -15,6 +15,10 @@ larger jobs, rather than running them on a shared Jupyter server.
 techniques for performing a harmonic-space two-point analysis (i.e. an
 angular power spectrum) on a point set.
 
+`cross_correlations.ipynb` explains how to do cross-correlations in 
+harmonic space, either between two alm sets, or between a pixelized map
+and a set of alms.
+
 `golden_spiral.ipynb` generates a set of points laid out in a Golden
 spiral (a.k.a. Fibonacci spiral) pattern and then analyzes their
 angular clustering in harmonic space.  This somewhat artificial example
