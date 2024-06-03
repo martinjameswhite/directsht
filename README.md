@@ -55,4 +55,40 @@ class and using the MaskDeconvolution class to handle the mode-coupling matrices
 and window functions) and look at how the code performs in Jupyter notebooks within
 the `notebooks` directory.  Please look there for further information.
 
+# Attribution
+If you find this code useful, please cite the original paper
+```
+@ARTICLE{2024JCAP...05..010B,
+       author = {{Baleato Lizancos}, Ant{\'o}n and {White}, Martin},
+        title = "{Harmonic analysis of discrete tracers of large-scale structure}",
+      journal = {\jcap},
+     keywords = {galaxy surveys, power spectrum, Astrophysics - Cosmology and Nongalactic Astrophysics},
+         year = 2024,
+        month = may,
+       volume = {2024},
+       number = {5},
+          eid = {010},
+        pages = {010},
+          doi = {10.1088/1475-7516/2024/05/010},
+archivePrefix = {arXiv},
+       eprint = {2312.12285},
+ primaryClass = {astro-ph.CO},
+       adsurl = {https://ui.adsabs.harvard.edu/abs/2024JCAP...05..010B},
+      adsnote = {Provided by the SAO/NASA Astrophysics Data System}
+}
+'''
+and code
+```
+@software{2024ascl.soft05011B,
+       author = {{Baleato Lizancos}, Ant{\'o}n and {White}, Martin},
+        title = "{DirectSHT: Direct spherical harmonic transform}",
+ howpublished = {Astrophysics Source Code Library, record ascl:2405.011},
+         year = 2024,
+        month = may,
+          eid = {ascl:2405.011},
+       adsurl = {https://ui.adsabs.harvard.edu/abs/2024ascl.soft05011B},
+      adsnote = {Provided by the SAO/NASA Astrophysics Data System}
+}
+'''
+
 
