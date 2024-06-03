@@ -76,7 +76,7 @@ archivePrefix = {arXiv},
        adsurl = {https://ui.adsabs.harvard.edu/abs/2024JCAP...05..010B},
       adsnote = {Provided by the SAO/NASA Astrophysics Data System}
 }
-'''
+```
 and code
 ```
 @software{2024ascl.soft05011B,
@@ -89,6 +89,6 @@ and code
        adsurl = {https://ui.adsabs.harvard.edu/abs/2024ascl.soft05011B},
       adsnote = {Provided by the SAO/NASA Astrophysics Data System}
 }
-'''
+```
 
 
