@@ -128,8 +128,9 @@ class DirectSHT:
         xval = np.abs(np.cos(t))
         pol  = np.nonzero(xval>=self.xmax)[0]
         equ  = np.nonzero(xval< self.xmax)[0]
-        assertion_success = False
-        if len(pol)>0:
+        assertion_success = True
+        if len(pol)>0:        
+            assertion_success = False
             yrot = hp.rotator.Rotator(rot=(0,90,0),eulertype='ZYZ',deg=True)
             tp,pp= yrot(t[pol],p[pol])
             try:
