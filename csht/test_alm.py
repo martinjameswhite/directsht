@@ -25,8 +25,7 @@ if __name__=="__main__":
     sht   = DirectSHT(Nl,Nx)
     print("Computation took ",time.time()-now," seconds.",flush=True)
     # Now let's compare to the library version.  Compute a
-    # table in the same format from SciPy.  Note SciPy has
-    # the ell,m indices and theta,phi arguments reversed!
+    # table in the same format from SciPy.
     from scipy.special import sph_harm_y
     #
     Ylb = np.zeros( ((Nl*(Nl+1))//2,Nx) )
