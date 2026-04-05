@@ -27,7 +27,7 @@ if __name__=="__main__":
     # Now let's compare to the library version.  Compute a
     # table in the same format from SciPy.  Note SciPy has
     # the ell,m indices and theta,phi arguments reversed!
-    from scipy.special import sph_harm
+    from scipy.special import sph_harm_y
     #
     Ylb = np.zeros( ((Nl*(Nl+1))//2,Nx) )
     for ell in range(41):
@@ -35,7 +35,7 @@ if __name__=="__main__":
             ii = sht.indx(ell,m)
             for i,x in enumerate(sht.x):
                 theta     = np.arccos(x)
-                Ylb[ii,i] = np.real( sph_harm(m,ell,0,theta) )
+                Ylb[ii,i] = np.real( sph_harm_y(ell,m,theta,0.) )
     # Just cross-check some Ylm values for sanity.
     print("Values:")
     ii = [0,Nx//3,2*Nx//3,Nx-1]
