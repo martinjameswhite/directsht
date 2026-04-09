@@ -7,7 +7,9 @@ from sympy.physics.wigner import wigner_3j
 def threej000(j1,j2,j3):
     """Returns the absolute value of the Wigner 3j symbol for
     integer j's and m1=m2=m3=0.
-    Uses https://arxiv.org/pdf/2602.15605 ."""
+    Uses https://arxiv.org/pdf/2602.15605 .
+    If the sign is needed, it can be returned as (-1)**g
+    where g=(j1+j2+j3)/2."""
     J  = j1+j2+j3
     if (J%2>0): return(0)
     if ((j3<-np.abs(j1-j2))|(j3>j1+j2)): return(0)
