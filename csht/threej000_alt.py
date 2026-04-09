@@ -66,7 +66,6 @@ if __name__=="__main__":
         for j2 in range(10):
             for j3 in range(10):
                 w3j = float(wigner_3j(j1,j2,j3,0,0,0))
-                w3j = np.abs(w3j)
                 m3j = threej000(j1,j2,j3)
                 J   = j1+j2+j3
                 if J%2==0:
