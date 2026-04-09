@@ -5,11 +5,10 @@ from sympy.physics.wigner import wigner_3j
 
 
 def threej000(j1,j2,j3):
-    """Returns the absolute value of the Wigner 3j symbol for
+    """Returns the Wigner 3j symbol for
     integer j's and m1=m2=m3=0.
     Uses https://arxiv.org/pdf/2602.15605 .
-    If the sign is needed, it can be returned as (-1)**pp
-    where pp=(j1+j2+j3)/2."""
+    The sign is (-1)**pp where pp=(j1+j2+j3)/2."""
     J  = j1+j2+j3
     if (J%2>0): return(0)
     if ((j3<-np.abs(j1-j2))|(j3>j1+j2)): return(0)
@@ -27,6 +26,7 @@ def threej000(j1,j2,j3):
     gg  = np.exp(lng)
     gfac= gg[p1]*gg[p2]*gg[p3]/gg[pp]
     tj  = np.sqrt( gfac/(J+1.) ) # Sign ignored.
+    tj *= (-1)**pp
     return(tj)
     #
 
